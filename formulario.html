@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Formulario de Intake — Inmigración</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
+    import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+    const firebaseConfig = {
+      apiKey: "AIzaSyCJRqzvnfcFPYoDC-eTDSEZtMcj_7mJPtM",
+      authDomain: "immigration-monitor.firebaseapp.com",
+      projectId: "immigration-monitor",
+      storageBucket: "immigration-monitor.firebasestorage.app",
+      messagingSenderId: "696902129948",
+      appId: "1:696902129948:web:95fa87711cf0880862c2d9",
+      measurementId: "G-9W7GHVBKYZ"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    window._db = db;
+    window._addDoc = addDoc;
+    window._collection = collection;
+  </script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',Inter,sans-serif;background:#F1F5F9;min-height:100vh;}
+    ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState} = React;
+
+const PAISES=["Afghanistan","Albania","Algeria","Angola","Argentina","Armenia","Azerbaijan","Bahamas","Bangladesh","Belarus","Belize","Bolivia","Brazil","Bulgaria","Burkina Faso","Burma (Myanmar)","Burundi","Cambodia","Cameroon","Chad","Chile","China","Colombia","Congo (DRC)","Costa Rica","Cuba","Dominican Republic","Ecuador","Egypt","El Salvador","Eritrea","Ethiopia","Georgia","Ghana","Guatemala","Guinea","Haiti","Honduras","India","Indonesia","Iran","Iraq","Jamaica","Jordan","Kazakhstan","Kenya","Kosovo","Kyrgyzstan","Lebanon","Liberia","Libya","Mali","Mauritania","Mexico","Moldova","Morocco","Mozambique","Nepal","Nicaragua","Niger","Nigeria","Pakistan","Panama","Paraguay","Peru","Philippines","Romania","Russia","Rwanda","Senegal","Sierra Leone","Somalia","South Sudan","Sri Lanka","Sudan","Syria","Tajikistan","Tanzania","Togo","Trinidad and Tobago","Turkey","Turkmenistan","Uganda","Ukraine","Uzbekistan","Venezuela","Vietnam","Yemen","Zimbabwe","Other"].sort();
+
+const FORMULARIOS = {
+  "I-589": {
+    label: "I-589 — Solicitud de Asilo",
+    icon: "⚖️",
+    color: "#7C3AED",
+    bg: "#F5F3FF",
+    border: "#DDD6FE",
+    desc: "Para personas que solicitan protección como refugiados",
+    secciones: [
+      {
+        titulo: "👤 Información Personal",
+        campos: [
+          {id:"nombre", label:"Nombre completo *", tipo:"text", placeholder:"Ej. María González López", req:true},
+          {id:"fechaNacimiento", label:"Fecha de nacimiento *", tipo:"date", req:true},
+          {id:"paisOrigen", label:"País de origen *", tipo:"select", opciones:PAISES, req:true},
+          {id:"ciudadOrigen", label:"Ciudad de origen", tipo:"text", placeholder:"Ej. Caracas"},
+          {id:"genero", label:"Género *", tipo:"select", opciones:["Femenino","Masculino","Prefiero no decir"], req:true},
+          {id:"estadoCivil", label:"Estado civil *", tipo:"select", opciones:["Soltero/a","Casado/a","Divorciado/a","Viudo/a","Unión libre"], req:true},
+        ]
+      },
+      {
+        titulo: "📱 Información de Contacto",
+        campos: [
+          {id:"telefono", label:"Teléfono *", tipo:"tel", placeholder:"(407) 555-1234", req:true},
+          {id:"email", label:"Email", tipo:"email", placeholder:"mi@email.com"},
+          {id:"direccion", label:"Dirección actual en USA", tipo:"text", placeholder:"Calle, Ciudad, Estado, ZIP"},
+        ]
+      },
+      {
+        titulo: "✈️ Historial Migratorio",
+        campos: [
+          {id:"fechaEntrada", label:"Fecha de entrada a USA *", tipo:"date", req:true},
+          {id:"formaEntrada", label:"¿Cómo entró a USA? *", tipo:"select", opciones:["Por aeropuerto (con visa)","Por frontera terrestre","Por frontera marítima","Sin documentos","Otro"], req:true},
+          {id:"tieneI94", label:"¿Tiene número I-94?", tipo:"select", opciones:["Sí","No","No sé"]},
+          {id:"numeroI94", label:"Número I-94 (si tiene)", tipo:"text", placeholder:"Ej. 12345678901"},
+          {id:"tieneVisa", label:"¿Tuvo o tiene visa?", tipo:"select", opciones:["Sí, vigente","Sí, vencida","Nunca tuve visa","No sé"]},
+          {id:"tipoVisa", label:"Tipo de visa (si tuvo)", tipo:"text", placeholder:"Ej. B2, F1, TN"},
+        ]
+      },
+      {
+        titulo: "👨‍👩‍👧 Familia",
+        campos: [
+          {id:"tieneHijos", label:"¿Tiene hijos?", tipo:"select", opciones:["Sí","No"]},
+          {id:"cantidadHijos", label:"¿Cuántos hijos?", tipo:"number", placeholder:"0"},
+          {id:"hijosEnUSA", label:"¿Están sus hijos en USA?", tipo:"select", opciones:["Sí, todos","Algunos","No","No tengo hijos"]},
+          {id:"conyugeEnUSA", label:"¿Su cónyuge está en USA?", tipo:"select", opciones:["Sí","No","No aplica"]},
+        ]
+      },
+      {
+        titulo: "📋 Información del Caso",
+        campos: [
+          {id:"razonAsilo", label:"¿Por qué solicita asilo? (resumen breve) *", tipo:"textarea", placeholder:"Explique brevemente por qué necesita protección...", req:true},
+          {id:"tieneAboConsular", label:"¿Ha tenido cita consular antes?", tipo:"select", opciones:["Sí","No","No sé"]},
+          {id:"fueDeportado", label:"¿Ha sido deportado antes?", tipo:"select", opciones:["Sí","No"]},
+          {id:"tieneCriminal", label:"¿Tiene antecedentes penales?", tipo:"select", opciones:["Sí","No"]},
+          {id:"alienNum", label:"Número Alien (A#) si lo tiene", tipo:"text", placeholder:"012-345-678"},
+        ]
+      },
+      {
+        titulo: "📄 Documentos Disponibles",
+        campos: [
+          {id:"docsPasaporte", label:"¿Tiene pasaporte?", tipo:"select", opciones:["Sí, vigente","Sí, vencido","No tengo"]},
+          {id:"docsIdentidad", label:"¿Tiene cédula u otro ID?", tipo:"select", opciones:["Sí","No"]},
+          {id:"docsActaNac", label:"¿Tiene acta de nacimiento?", tipo:"select", opciones:["Sí","No","La estoy tramitando"]},
+          {id:"docsEvidencia", label:"¿Tiene evidencia de persecución?", tipo:"select", opciones:["Sí, mucha","Sí, algo","Muy poca","No tengo"]},
+          {id:"otrosDocumentos", label:"Otros documentos que tiene", tipo:"textarea", placeholder:"Liste cualquier otro documento relevante..."},
+        ]
+      },
+      {
+        titulo: "📝 Notas Adicionales",
+        campos: [
+          {id:"notas", label:"¿Hay algo más que quiera que sepamos?", tipo:"textarea", placeholder:"Cualquier información adicional que considere importante..."},
+          {id:"comoNosConocio", label:"¿Cómo nos conoció?", tipo:"select", opciones:["Referido por amigo/familiar","Redes sociales","Google","WhatsApp","Otro"]},
+        ]
+      },
+    ]
+  },
+  "I-765": {
+    label: "I-765 — Permiso de Trabajo (EAD)",
+    icon: "💼",
+    color: "#0369A1",
+    bg: "#F0F9FF",
+    border: "#BAE6FD",
+    desc: "Para solicitar autorización de empleo en Estados Unidos",
+    secciones: [
+      {
+        titulo: "👤 Información Personal",
+        campos: [
+          {id:"nombre", label:"Nombre completo *", tipo:"text", placeholder:"Ej. Carlos Ramírez", req:true},
+          {id:"fechaNacimiento", label:"Fecha de nacimiento *", tipo:"date", req:true},
+          {id:"paisOrigen", label:"País de origen *", tipo:"select", opciones:PAISES, req:true},
+          {id:"genero", label:"Género *", tipo:"select", opciones:["Femenino","Masculino","Prefiero no decir"], req:true},
+        ]
+      },
+      {
+        titulo: "📱 Contacto",
+        campos: [
+          {id:"telefono", label:"Teléfono *", tipo:"tel", placeholder:"(407) 555-1234", req:true},
+          {id:"email", label:"Email", tipo:"email", placeholder:"mi@email.com"},
+          {id:"direccion", label:"Dirección actual", tipo:"text", placeholder:"Calle, Ciudad, Estado, ZIP"},
+        ]
+      },
+      {
+        titulo: "📋 Información Migratoria",
+        campos: [
+          {id:"alienNum", label:"Número Alien (A#) *", tipo:"text", placeholder:"012-345-678", req:true},
+          {id:"tipoEAD", label:"¿Por qué solicita el permiso? *", tipo:"select", opciones:["Asilo pendiente (C08)","Asilo aprobado","Ajuste de estatus pendiente","TPS","DACA","Otro"], req:true},
+          {id:"fechaEntrada", label:"Fecha de entrada a USA", tipo:"date"},
+          {id:"tieneSSN", label:"¿Tiene número de seguro social?", tipo:"select", opciones:["Sí","No"]},
+          {id:"tieneEADAnterior", label:"¿Ha tenido permiso de trabajo antes?", tipo:"select", opciones:["Sí","No"]},
+          {id:"numEADAnterior", label:"Número del EAD anterior (si tuvo)", tipo:"text", placeholder:"Ej. IOE1234567890"},
+          {id:"fechaVencEAD", label:"Fecha vencimiento EAD anterior", tipo:"date"},
+        ]
+      },
+      {
+        titulo: "📄 Documentos",
+        campos: [
+          {id:"docsPasaporte", label:"¿Tiene pasaporte?", tipo:"select", opciones:["Sí, vigente","Sí, vencido","No"]},
+          {id:"tieneRecibo", label:"¿Tiene número de recibo USCIS?", tipo:"select", opciones:["Sí","No"]},
+          {id:"numRecibo", label:"Número de recibo (si tiene)", tipo:"text", placeholder:"Ej. MSC2112345678"},
+          {id:"notas", label:"Notas adicionales", tipo:"textarea", placeholder:"Cualquier información relevante..."},
+        ]
+      },
+    ]
+  },
+  "I-485": {
+    label: "I-485 — Ajuste de Estatus (Green Card)",
+    icon: "🟢",
+    color: "#16A34A",
+    bg: "#F0FDF4",
+    border: "#BBF7D0",
+    desc: "Para solicitar la residencia permanente (Green Card)",
+    secciones: [
+      {
+        titulo: "👤 Información Personal",
+        campos: [
+          {id:"nombre", label:"Nombre completo *", tipo:"text", placeholder:"Ej. Ana Flores", req:true},
+          {id:"fechaNacimiento", label:"Fecha de nacimiento *", tipo:"date", req:true},
+          {id:"paisOrigen", label:"País de origen *", tipo:"select", opciones:PAISES, req:true},
+          {id:"genero", label:"Género", tipo:"select", opciones:["Femenino","Masculino","Prefiero no decir"]},
+          {id:"estadoCivil", label:"Estado civil *", tipo:"select", opciones:["Soltero/a","Casado/a","Divorciado/a","Viudo/a"], req:true},
+        ]
+      },
+      {
+        titulo: "📱 Contacto",
+        campos: [
+          {id:"telefono", label:"Teléfono *", tipo:"tel", placeholder:"(407) 555-1234", req:true},
+          {id:"email", label:"Email", tipo:"email", placeholder:"mi@email.com"},
+          {id:"direccion", label:"Dirección actual", tipo:"text", placeholder:"Calle, Ciudad, Estado, ZIP"},
+        ]
+      },
+      {
+        titulo: "📋 Información Migratoria",
+        campos: [
+          {id:"alienNum", label:"Número Alien (A#) *", tipo:"text", placeholder:"012-345-678", req:true},
+          {id:"fechaEntrada", label:"Fecha de entrada a USA *", tipo:"date", req:true},
+          {id:"visaActual", label:"Estatus migratorio actual", tipo:"select", opciones:["Asilo aprobado","TPS","DACA","Visa de trabajo","Visa de estudiante","Sin estatus","Otro"]},
+          {id:"baseAjuste", label:"¿Por qué califica para Green Card? *", tipo:"select", opciones:["Matrimonio con ciudadano/a","Matrimonio con residente","Petición familiar (hermano/padre)","Asilo aprobado","Trabajo","Lotería de visas (DV)","Otro"], req:true},
+          {id:"patenteI130", label:"¿Tiene I-130 aprobada?", tipo:"select", opciones:["Sí","No","En proceso"]},
+          {id:"numRecibo", label:"Número de recibo I-130 (si tiene)", tipo:"text", placeholder:"Ej. IOE1234567890"},
+        ]
+      },
+      {
+        titulo: "👨‍👩‍👧 Familia",
+        campos: [
+          {id:"nombrePeticionario", label:"Nombre del peticionario (quien hizo la petición)", tipo:"text", placeholder:"Nombre completo"},
+          {id:"relacionPeticionario", label:"Relación con el peticionario", tipo:"select", opciones:["Cónyuge ciudadano/a","Cónyuge residente","Padre/Madre","Hijo/a","Hermano/a","Otro"]},
+          {id:"tieneHijos", label:"¿Tiene hijos menores?", tipo:"select", opciones:["Sí","No"]},
+        ]
+      },
+      {
+        titulo: "📄 Documentos",
+        campos: [
+          {id:"docsPasaporte", label:"¿Tiene pasaporte?", tipo:"select", opciones:["Sí, vigente","Sí, vencido","No"]},
+          {id:"docsActaNac", label:"¿Tiene acta de nacimiento?", tipo:"select", opciones:["Sí","No","En trámite"]},
+          {id:"docsMatrimonio", label:"¿Tiene acta de matrimonio?", tipo:"select", opciones:["Sí","No","No aplica"]},
+          {id:"notas", label:"Notas adicionales", tipo:"textarea", placeholder:"Información adicional..."},
+        ]
+      },
+    ]
+  },
+  "I-130": {
+    label: "I-130 — Petición Familiar",
+    icon: "👨‍👩‍👧",
+    color: "#D97706",
+    bg: "#FFFBEB",
+    border: "#FDE68A",
+    desc: "Para ciudadanos o residentes que quieren traer a un familiar",
+    secciones: [
+      {
+        titulo: "👤 Información del Peticionario (quien hace la petición)",
+        campos: [
+          {id:"nombre", label:"Su nombre completo *", tipo:"text", placeholder:"Ej. Pedro Martínez", req:true},
+          {id:"fechaNacimiento", label:"Su fecha de nacimiento *", tipo:"date", req:true},
+          {id:"estatusMigratorio", label:"Su estatus migratorio *", tipo:"select", opciones:["Ciudadano americano por nacimiento","Ciudadano americano por naturalización","Residente permanente (Green Card)"], req:true},
+          {id:"telefono", label:"Teléfono *", tipo:"tel", placeholder:"(407) 555-1234", req:true},
+          {id:"email", label:"Email", tipo:"email", placeholder:"mi@email.com"},
+          {id:"direccion", label:"Dirección", tipo:"text", placeholder:"Calle, Ciudad, Estado, ZIP"},
+        ]
+      },
+      {
+        titulo: "👥 Información del Beneficiario (familiar a traer)",
+        campos: [
+          {id:"nombreBeneficiario", label:"Nombre completo del familiar *", tipo:"text", placeholder:"Nombre del familiar", req:true},
+          {id:"fechaNacBeneficiario", label:"Fecha de nacimiento del familiar *", tipo:"date", req:true},
+          {id:"paisBeneficiario", label:"País donde está el familiar *", tipo:"select", opciones:PAISES, req:true},
+          {id:"relacionFamiliar", label:"¿Qué relación tiene con usted? *", tipo:"select", opciones:["Cónyuge","Hijo/a menor de 21","Hijo/a mayor de 21","Padre/Madre","Hermano/a"], req:true},
+          {id:"estadoCivilBenef", label:"Estado civil del familiar", tipo:"select", opciones:["Soltero/a","Casado/a","Divorciado/a","Viudo/a"]},
+          {id:"tieneHijosBenef", label:"¿El familiar tiene hijos?", tipo:"select", opciones:["Sí","No"]},
+        ]
+      },
+      {
+        titulo: "📄 Documentos",
+        campos: [
+          {id:"tieneActaMatrimonio", label:"¿Tiene acta de matrimonio?", tipo:"select", opciones:["Sí","No","No aplica"]},
+          {id:"tieneActaNac", label:"¿Tiene acta de nacimiento del familiar?", tipo:"select", opciones:["Sí","No","En trámite"]},
+          {id:"notas", label:"Notas adicionales", tipo:"textarea", placeholder:"Información adicional..."},
+        ]
+      },
+    ]
+  },
+  "N-400": {
+    label: "N-400 — Naturalización",
+    icon: "🇺🇸",
+    color: "#DC2626",
+    bg: "#FEF2F2",
+    border: "#FECACA",
+    desc: "Para solicitar la ciudadanía americana",
+    secciones: [
+      {
+        titulo: "👤 Información Personal",
+        campos: [
+          {id:"nombre", label:"Nombre completo *", tipo:"text", placeholder:"Ej. Luis García", req:true},
+          {id:"fechaNacimiento", label:"Fecha de nacimiento *", tipo:"date", req:true},
+          {id:"paisOrigen", label:"País de origen *", tipo:"select", opciones:PAISES, req:true},
+          {id:"genero", label:"Género", tipo:"select", opciones:["Femenino","Masculino","Prefiero no decir"]},
+          {id:"estadoCivil", label:"Estado civil", tipo:"select", opciones:["Soltero/a","Casado/a","Divorciado/a","Viudo/a"]},
+        ]
+      },
+      {
+        titulo: "📱 Contacto",
+        campos: [
+          {id:"telefono", label:"Teléfono *", tipo:"tel", placeholder:"(407) 555-1234", req:true},
+          {id:"email", label:"Email", tipo:"email", placeholder:"mi@email.com"},
+          {id:"direccion", label:"Dirección actual", tipo:"text", placeholder:"Calle, Ciudad, Estado, ZIP"},
+        ]
+      },
+      {
+        titulo: "📋 Información de Residencia",
+        campos: [
+          {id:"alienNum", label:"Número Alien (A#) *", tipo:"text", placeholder:"012-345-678", req:true},
+          {id:"numGreenCard", label:"Número de Green Card", tipo:"text", placeholder:"Ej. ABC1234567890"},
+          {id:"fechaGreenCard", label:"Fecha en que obtuvo la Green Card *", tipo:"date", req:true},
+          {id:"aniosResidencia", label:"¿Cuántos años lleva como residente?", tipo:"number", placeholder:"Ej. 5"},
+          {id:"baseCiudadania", label:"¿Por qué aplica a ciudadanía? *", tipo:"select", opciones:["5 años como residente","3 años casado/a con ciudadano/a","Servicio militar","Otro"], req:true},
+          {id:"viajesExterior", label:"¿Ha viajado fuera de USA en los últimos 5 años?", tipo:"select", opciones:["Sí","No"]},
+          {id:"detallesViajes", label:"Si viajó, ¿cuánto tiempo estuvo fuera?", tipo:"text", placeholder:"Ej. 2 veces, 1 mes cada vez"},
+        ]
+      },
+      {
+        titulo: "📋 Elegibilidad",
+        campos: [
+          {id:"hablaIngles", label:"¿Habla inglés?", tipo:"select", opciones:["Bien","Regular","Poco","No"]},
+          {id:"tieneCriminal", label:"¿Tiene antecedentes penales?", tipo:"select", opciones:["No","Sí, menores","Sí, mayores"]},
+          {id:"pagaImpuestos", label:"¿Ha pagado impuestos en USA?", tipo:"select", opciones:["Sí, siempre","Sí, la mayoría","No he trabajado legalmente","No"]},
+          {id:"notas", label:"Notas adicionales", tipo:"textarea", placeholder:"Información adicional..."},
+        ]
+      },
+    ]
+  },
+  "FOIA": {
+    label: "FOIA — Solicitud de Expediente",
+    icon: "📂",
+    color: "#0891B2",
+    bg: "#ECFEFF",
+    border: "#A5F3FC",
+    desc: "Para solicitar su expediente migratorio al gobierno",
+    secciones: [
+      {
+        titulo: "👤 Información Personal",
+        campos: [
+          {id:"nombre", label:"Nombre completo *", tipo:"text", placeholder:"Ej. Rosa Díaz", req:true},
+          {id:"nombreAnterior", label:"Nombres anteriores (si aplica)", tipo:"text", placeholder:"Nombres que ha usado antes"},
+          {id:"fechaNacimiento", label:"Fecha de nacimiento *", tipo:"date", req:true},
+          {id:"paisOrigen", label:"País de origen *", tipo:"select", opciones:PAISES, req:true},
+          {id:"alienNum", label:"Número Alien (A#) si lo tiene", tipo:"text", placeholder:"012-345-678"},
+        ]
+      },
+      {
+        titulo: "📱 Contacto",
+        campos: [
+          {id:"telefono", label:"Teléfono *", tipo:"tel", placeholder:"(407) 555-1234", req:true},
+          {id:"email", label:"Email", tipo:"email", placeholder:"mi@email.com"},
+          {id:"direccion", label:"Dirección actual", tipo:"text", placeholder:"Calle, Ciudad, Estado, ZIP"},
+        ]
+      },
+      {
+        titulo: "📋 Información del FOIA",
+        campos: [
+          {id:"agenciaFOIA", label:"¿A qué agencia solicita el expediente? *", tipo:"select", opciones:["USCIS — Trámites migratorios","ICE — Detenciones y deportaciones","CBP — Entrada al país","Ambas: USCIS e ICE","Todas las agencias"], req:true},
+          {id:"razonFOIA", label:"¿Para qué necesita su expediente?", tipo:"select", opciones:["Para mi caso de asilo","Para mi caso en corte","Para saber mi historial","Para otro trámite","No sé exactamente"]},
+          {id:"fechaEntrada", label:"Fecha aproximada de entrada a USA", tipo:"date"},
+          {id:"tuvoDetencion", label:"¿Fue detenido/a por inmigración?", tipo:"select", opciones:["Sí","No","No sé"]},
+          {id:"tuvoDeportacion", label:"¿Ha sido deportado/a antes?", tipo:"select", opciones:["Sí","No"]},
+          {id:"notas", label:"Notas adicionales", tipo:"textarea", placeholder:"Cualquier información que ayude a localizar su expediente..."},
+        ]
+      },
+    ]
+  },
+};
+
+// ── Componentes ──────────────────────────────────────────────────────────────
+function Campo({campo, value, onChange}){
+  const base = {width:"100%", padding:"10px 12px", borderRadius:8, border:"1px solid #D1D5DB", fontSize:14, outline:"none", fontFamily:"inherit"};
+  if(campo.tipo==="select") return(
+    <select value={value||""} onChange={e=>onChange(e.target.value)} style={{...base, background:"#fff", cursor:"pointer"}}>
+      <option value="">Seleccionar...</option>
+      {campo.opciones.map(o=><option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+  if(campo.tipo==="textarea") return(
+    <textarea value={value||""} onChange={e=>onChange(e.target.value)} placeholder={campo.placeholder} rows={3}
+      style={{...base, resize:"vertical"}}/>
+  );
+  return(
+    <input type={campo.tipo} value={value||""} onChange={e=>onChange(e.target.value)}
+      placeholder={campo.placeholder} style={base}/>
+  );
+}
+
+function Formulario(){
+  const [paso, setPaso] = useState("seleccion"); // seleccion | formulario | enviado
+  const [tipoForm, setTipoForm] = useState(null);
+  const [seccionActual, setSeccionActual] = useState(0);
+  const [datos, setDatos] = useState({});
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState("");
+
+  const form = tipoForm ? FORMULARIOS[tipoForm] : null;
+  const secciones = form?.secciones || [];
+  const totalSecciones = secciones.length;
+
+  const updateDato = (id, val) => setDatos(p=>({...p,[id]:val}));
+
+  const seccionCompleta = () => {
+    const sec = secciones[seccionActual];
+    return sec.campos.filter(c=>c.req).every(c=>datos[c.id]&&datos[c.id].trim?.()!=="");
+  };
+
+  const handleEnviar = async () => {
+    if(!seccionCompleta()){setError("Por favor complete los campos obligatorios (*)");return;}
+    setEnviando(true);setError("");
+    try{
+      await window._addDoc(window._collection(window._db,"borradores"),{
+        ...datos,
+        tipoFormulario: tipoForm,
+        labelFormulario: FORMULARIOS[tipoForm].label,
+        estado: "borrador",
+        fechaEnvio: new Date().toISOString(),
+        fuente: "formulario_cliente",
+      });
+      setPaso("enviado");
+    }catch(e){
+      setError("Hubo un error al enviar. Por favor intente de nuevo.");
+      console.error(e);
+    }
+    setEnviando(false);
+  };
+
+  // ── Pantalla de selección ──────────────────────────────────────────────────
+  if(paso==="seleccion") return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0F172A 0%,#1E40AF 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{width:"100%",maxWidth:680}}>
+        <div style={{textAlign:"center",marginBottom:32,color:"#fff"}}>
+          <div style={{fontSize:48,marginBottom:12}}>⚖️</div>
+          <h1 style={{fontSize:24,fontWeight:800,margin:0}}>Formulario de Intake</h1>
+          <p style={{fontSize:14,opacity:0.75,marginTop:8}}>Seleccione el tipo de proceso que necesita</p>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12}}>
+          {Object.entries(FORMULARIOS).map(([key,f])=>(
+            <button key={key} onClick={()=>{setTipoForm(key);setPaso("formulario");setSeccionActual(0);setDatos({});}}
+              style={{background:"#fff",border:`2px solid ${f.border}`,borderRadius:12,padding:"20px 16px",cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
+              <div style={{fontSize:28,marginBottom:8}}>{f.icon}</div>
+              <div style={{fontWeight:700,fontSize:13,color:f.color,marginBottom:4}}>{key}</div>
+              <div style={{fontSize:12,fontWeight:600,color:"#1E293B",marginBottom:4}}>{f.label.split("—")[1]?.trim()}</div>
+              <div style={{fontSize:11,color:"#64748B",lineHeight:1.4}}>{f.desc}</div>
+            </button>
+          ))}
+        </div>
+        <p style={{textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.5)",marginTop:24}}>
+          Sus datos están protegidos y solo serán vistos por nuestra oficina
+        </p>
+      </div>
+    </div>
+  );
+
+  // ── Pantalla de éxito ──────────────────────────────────────────────────────
+  if(paso==="enviado") return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0F172A 0%,#166534 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:"#fff",borderRadius:16,maxWidth:480,width:"100%",padding:40,textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{fontSize:64,marginBottom:16}}>✅</div>
+        <h2 style={{fontSize:22,fontWeight:800,color:"#166534",margin:"0 0 12px"}}>¡Formulario Enviado!</h2>
+        <p style={{fontSize:15,color:"#374151",marginBottom:8}}>Hemos recibido su información correctamente.</p>
+        <p style={{fontSize:14,color:"#6B7280",marginBottom:24}}>Nuestra oficina revisará sus datos y se comunicará con usted pronto por teléfono o WhatsApp.</p>
+        <div style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:10,padding:"14px",marginBottom:24}}>
+          <div style={{fontSize:13,fontWeight:600,color:"#166534"}}>📋 Formulario enviado: {FORMULARIOS[tipoForm]?.label}</div>
+          <div style={{fontSize:12,color:"#374151",marginTop:4}}>Nombre: {datos.nombre}</div>
+          <div style={{fontSize:12,color:"#374151"}}>Teléfono: {datos.telefono}</div>
+        </div>
+        <button onClick={()=>{setPaso("seleccion");setTipoForm(null);setDatos({});}}
+          style={{background:"#1E40AF",color:"#fff",border:"none",borderRadius:9,padding:"12px 28px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
+          Enviar otro formulario
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── Formulario por secciones ───────────────────────────────────────────────
+  const seccion = secciones[seccionActual];
+  const pct = Math.round(((seccionActual+1)/totalSecciones)*100);
+
+  return(
+    <div style={{minHeight:"100vh",background:"#F1F5F9",paddingBottom:40}}>
+      {/* Header */}
+      <div style={{background:`linear-gradient(135deg,#0F172A,${form.color})`,padding:"20px 20px 16px",color:"#fff"}}>
+        <div style={{maxWidth:600,margin:"0 auto"}}>
+          <button onClick={()=>setPaso("seleccion")} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:7,padding:"6px 12px",fontSize:12,cursor:"pointer",marginBottom:12}}>
+            ← Volver
+          </button>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+            <span style={{fontSize:28}}>{form.icon}</span>
+            <div>
+              <h1 style={{margin:0,fontSize:16,fontWeight:700}}>{form.label}</h1>
+              <p style={{margin:0,fontSize:12,opacity:0.75}}>{form.desc}</p>
+            </div>
+          </div>
+          {/* Progreso */}
+          <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,overflow:"hidden",marginBottom:6}}>
+            <div style={{height:"100%",borderRadius:20,background:"#fff",width:`${pct}%`,transition:"width 0.3s"}}/>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,opacity:0.8}}>
+            <span>Sección {seccionActual+1} de {totalSecciones}: {seccion.titulo}</span>
+            <span>{pct}% completado</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Contenido */}
+      <div style={{maxWidth:600,margin:"20px auto",padding:"0 16px"}}>
+        <div style={{background:"#fff",borderRadius:14,padding:24,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:`1px solid ${form.border}`}}>
+          <h2 style={{fontSize:15,fontWeight:700,color:"#0F172A",marginBottom:20,paddingBottom:10,borderBottom:`2px solid ${form.border}`}}>
+            {seccion.titulo}
+          </h2>
+          <div style={{display:"grid",gap:14}}>
+            {seccion.campos.map(campo=>(
+              <div key={campo.id}>
+                <label style={{display:"block",fontSize:12,fontWeight:600,color:"#374151",marginBottom:5,textTransform:"uppercase",letterSpacing:"0.04em"}}>
+                  {campo.label} {campo.req&&<span style={{color:"#EF4444"}}>*</span>}
+                </label>
+                <Campo campo={campo} value={datos[campo.id]} onChange={v=>updateDato(campo.id,v)}/>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {error&&<div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:9,padding:"12px 16px",fontSize:13,color:"#DC2626",marginTop:12}}>⚠️ {error}</div>}
+
+        {/* Navegación */}
+        <div style={{display:"flex",gap:10,marginTop:16,justifyContent:"space-between"}}>
+          <button onClick={()=>{setSeccionActual(p=>p-1);setError("");}} disabled={seccionActual===0}
+            style={{padding:"11px 22px",borderRadius:9,border:"1px solid #D1D5DB",background:seccionActual===0?"#F1F5F9":"#fff",color:seccionActual===0?"#9CA3AF":"#374151",fontSize:14,cursor:seccionActual===0?"not-allowed":"pointer",fontWeight:500}}>
+            ← Anterior
+          </button>
+          {seccionActual < totalSecciones-1 ? (
+            <button onClick={()=>{if(!seccionCompleta()){setError("Complete los campos obligatorios (*)");return;}setSeccionActual(p=>p+1);setError("");window.scrollTo(0,0);}}
+              style={{padding:"11px 28px",borderRadius:9,border:"none",background:form.color,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+              Siguiente →
+            </button>
+          ):(
+            <button onClick={handleEnviar} disabled={enviando}
+              style={{padding:"11px 28px",borderRadius:9,border:"none",background:enviando?"#E5E7EB":"#16A34A",color:enviando?"#9CA3AF":"#fff",fontSize:14,fontWeight:700,cursor:enviando?"not-allowed":"pointer"}}>
+              {enviando?"Enviando...":"✅ Enviar formulario"}
+            </button>
+          )}
+        </div>
+
+        {/* Indicadores de sección */}
+        <div style={{display:"flex",gap:6,justifyContent:"center",marginTop:16,flexWrap:"wrap"}}>
+          {secciones.map((_,i)=>(
+            <div key={i} style={{width:8,height:8,borderRadius:"50%",background:i===seccionActual?form.color:i<seccionActual?"#16A34A":"#CBD5E1",transition:"all 0.2s"}}/>
+          ))}
+        </div>
+        <p style={{textAlign:"center",fontSize:11,color:"#94A3B8",marginTop:12}}>
+          🔒 Sus datos están protegidos y solo son visibles para nuestra oficina
+        </p>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Formulario/>);
+</script>
+</body>
+</html>
