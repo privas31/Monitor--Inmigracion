@@ -374,7 +374,7 @@ function App(){
   const[showAddUser,setShowAddUser]=useState(false);const[newUserEmail,setNewUserEmail]=useState("");const[newUserPass,setNewUserPass]=useState("");const[addUserMsg,setAddUserMsg]=useState("");
   const[equipo,setEquipo]=useState([]);const[showTeam,setShowTeam]=useState(false);const[newMember,setNewMember]=useState("");
 
-  useEffect(()=>{const{auth,onAuthStateChanged}=window._firebase;return onAuthStateChanged(auth,u=>{setUser(u);setAuthLoading(false);});});
+  useEffect(()=>{const{auth,onAuthStateChanged}=window._firebase;return onAuthStateChanged(auth,u=>{setUser(u);setAuthLoading(false);});},[]);
   useEffect(()=>{if(!user)return;loadCases();loadTeam();loadBorradores();},[user]);
 
   const loadCases=async()=>{setLoading(true);try{const{db,collection,getDocs,query,orderBy}=window._firebase;const q=query(collection(db,"clientes"),orderBy("createdAt","desc"));const snap=await getDocs(q);setClientes(snap.docs.map(d=>({id:d.id,...d.data()})));}catch(e){console.error(e);}setLoading(false);};
