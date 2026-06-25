@@ -172,21 +172,9 @@ function LoginScreen({onLogin}){
     try{
       const{auth,signInWithEmailAndPassword,db,doc,getDoc}=window._firebase;
       const cred=await signInWithEmailAndPassword(auth,email,pw);
-      const userDoc=await getDoc(doc(db,"users",cred.user.uid));
-      if(!userDoc.exists())throw new Error("Usuario no encontrado");
-      const userData=userDoc.data();
-      if(!["office_admin","employee","superadmin"].includes(userData.role))throw new Error("Sin acceso");
-      // Get office data
-      let officeInfo=null;
-      if(userData.officeId){
-        const officeDoc=await getDoc(doc(db,"offices",userData.officeId));
-        if(officeDoc.exists()){
-              const od3=officeDoc.data();
-              officeInfo={id:officeDoc.id,...od3};
-              if(od3.logoUrl){setOfficeLogo(od3.logoUrl);window._officeLogo=od3.logoUrl;}
-              if(od3.enabledModules&&od3.enabledModules.length>0)setEnabledModules(od3.enabledModules);
-            }
-      }
+      // Monitor personal — no requiere colección users en Firestore
+      const userData={role:"office_admin",officeId:"personal",displayName:cred.user.email};
+      const officeInfo={id:"personal",name:"Mi Oficina",plan:"professional",enabledModules:["immigration"]};
       onLogin(cred.user,userData,officeInfo);
     }catch(e){setErr("Email o contraseña incorrectos");}setLoading(false);};
   return(<div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0F172A 0%,#1E40AF 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
@@ -268,9 +256,9 @@ function App(){
       // Auto-restore session
       try{
         const{db,doc,getDoc}=window._firebase;
-        const userDoc=await getDoc(doc(db,"users",u.uid));
-        if(userDoc.exists()){
-          const ud=userDoc.data();
+        // Monitor personal — use simple auth data
+        const ud = { role:"office_admin", officeId:"personal", displayName: u.email };
+        if(true){
           setUserData(ud);
           if(ud.officeId){
             const officeDoc=await getDoc(doc(db,"offices",ud.officeId));
