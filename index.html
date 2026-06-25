@@ -189,7 +189,7 @@ function LoginScreen({onLogin}){
       }
       onLogin(cred.user,userData,officeInfo);
     }catch(e){setErr("Email o contraseña incorrectos");}setLoading(false);};
-  return(<div onClick={()=>setOpenMenuId(null)} style={{minHeight:"100vh",background:"linear-gradient(135deg,#0F172A 0%,#1E40AF 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+  return(<div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0F172A 0%,#1E40AF 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
     <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:400,padding:36,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
       <div style={{textAlign:"center",marginBottom:28}}>
         <div style={{marginBottom:12,display:"flex",justifyContent:"center"}}>
