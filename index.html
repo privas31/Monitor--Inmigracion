@@ -1687,34 +1687,46 @@ const loadTeam=async()=>{
 
           <div style={{overflowY:"auto",padding:"16px 24px 24px",flex:1}}>
 
-            {/* Real users with Firebase access */}
-            <div>
-              <div style={{fontSize:12,fontWeight:700,color:"#374151",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.05em"}}>{t("Usuarios con acceso al sistema","Users with system access")}</div>
-              {officeUsers.length===0?(
-                <div style={{textAlign:"center",padding:"24px 0",color:"#94A3B8",fontSize:13}}>
-                  <div style={{fontSize:32,marginBottom:8}}>👤</div>
-                  <div>{t("Sin empleadas con acceso creado","No employees with system access")}</div>
-                  <div style={{fontSize:12,marginTop:4}}>{t("Ve a Usuarios para crear acceso","Go to Users to create access")}</div>
+            {/* ── Miembros para asignación de casos ── */}
+            <div style={{marginBottom:20}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#374151",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.05em"}}>
+                👤 {t("Miembros del equipo (para asignar casos)","Team members (for case assignment)")}
+              </div>
+              <div style={{fontSize:12,color:"#64748B",marginBottom:10}}>
+                {t("Agrega los nombres de las personas que atienden clientes. Aparecerán en el campo Encargada.","Add the names of people who handle clients. They will appear in the Assigned To field.")}
+              </div>
+              <div style={{display:"flex",gap:8,marginBottom:10}}>
+                <input
+                  value={newMember}
+                  onChange={e=>setNewMember(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&addMember()}
+                  placeholder={t("Nombre de la persona...","Person's name...")}
+                  style={{flex:1,padding:"9px 12px",borderRadius:8,border:"1px solid #D1D5DB",fontSize:13,outline:"none"}}
+                />
+                <button
+                  onClick={addMember}
+                  style={{background:"#1E40AF",color:"#fff",border:"none",borderRadius:8,padding:"9px 16px",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}
+                >
+                  + {t("Agregar","Add")}
+                </button>
+              </div>
+              {equipo.length===0?(
+                <div style={{textAlign:"center",padding:"14px 0",color:"#94A3B8",fontSize:13,background:"#F8FAFC",borderRadius:8,border:"1px dashed #E2E8F0"}}>
+                  {t("Sin miembros agregados aún","No members added yet")}
                 </div>
               ):(
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {officeUsers.map(u=>(
-                    <div key={u.id} style={{display:"flex",alignItems:"center",gap:12,background:"#F8FAFC",borderRadius:10,padding:"11px 14px",border:"1px solid #E2E8F0"}}>
-                      <div style={{width:36,height:36,borderRadius:"50%",background:u.role==="admin"?"#1E40AF":"#7C3AED",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0}}>
-                        {(u.displayName||u.email||"?")[0].toUpperCase()}
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {equipo.map((m,i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,background:"#F0FDF4",borderRadius:8,padding:"9px 12px",border:"1px solid #BBF7D0"}}>
+                      <div style={{width:30,height:30,borderRadius:"50%",background:"#16A34A",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:"#fff",flexShrink:0}}>
+                        {m[0].toUpperCase()}
                       </div>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:13,fontWeight:700,color:"#0F172A",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.displayName||"Sin nombre"}</div>
-                        <div style={{fontSize:11,color:"#64748B",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.email}</div>
-                        <div style={{fontSize:11,color:u.role==="admin"?"#1E40AF":"#7C3AED",fontWeight:600,marginTop:2}}>
-                          {u.role==="admin"?t("👑 Administrador","👑 Administrator"):t("👩 Empleada","👩 Employee")}
-                        </div>
-                      </div>
+                      <div style={{flex:1,fontSize:13,fontWeight:600,color:"#0F172A"}}>{m}</div>
                       <button
-                        onClick={()=>setConfirmDeleteUser(u)}
-                        style={{background:"#FEF2F2",color:"#DC2626",border:"1px solid #FECACA",borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}
+                        onClick={()=>removeMember(i)}
+                        style={{background:"#FEF2F2",color:"#DC2626",border:"1px solid #FECACA",borderRadius:6,padding:"5px 10px",fontSize:12,fontWeight:600,cursor:"pointer"}}
                       >
-                        🗑 {t("Eliminar acceso","Remove access")}
+                        {t("Quitar","Remove")}
                       </button>
                     </div>
                   ))}
@@ -1722,7 +1734,11 @@ const loadTeam=async()=>{
               )}
             </div>
 
-          </div>
+            <div style={{height:1,background:"#F1F5F9",margin:"4px 0 16px"}}/>
+
+            {/* ── Usuarios con acceso al sistema ── */}
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:"#374151",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.05em"}}>{t("Usuarios con acceso al sistema","Users with system access")}</div>          </div>
         </div>
       </div>
     )}
