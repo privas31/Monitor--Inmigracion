@@ -745,7 +745,7 @@ const loadTeam=async()=>{
     if(filtroStatus!=="todos"&&st!==filtroStatus)return false;
     if(filtroSistema!=="todos"&&!(c.casos||[]).some(ca=>ca.sistema===filtroSistema))return false;
     const q=búsqueda.toLowerCase();
-    return!q||c.nombre.toLowerCase().includes(q)||(c.alienNum||"").replace(/\D/g,"").includes(q.replace(/\D/g,""))||(c.encargada||"").toLowerCase().includes(q)||(c.paisOrigen||"").toLowerCase().includes(q)||(c.casos||[]).some(ca=>(ca.receiptNum||"").toLowerCase().includes(q)||(ca.foiaTracking||"").toLowerCase().includes(q));
+    return!q||c.nombre.toLowerCase().includes(q)||(c.alienNum||"").replace(/\D/g,"").includes(q.replace(/\D/g,""));
   }).sort((a,b)=>{
     if(sortBy==="fecha"){const fa=getPróximaFecha(a),fb=getPróximaFecha(b);if(!fa)return 1;if(!fb)return -1;return new Date(fa)-new Date(fb);}
     return a.nombre.localeCompare(b.nombre);
