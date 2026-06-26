@@ -740,16 +740,24 @@ const loadTeam=async()=>{
     setAddUserLoading(false);
   };
 
-  const filtered=clientes.filter(c=>{
-    const st=getStatusCliente(c);
-    if(filtroStatus!=="todos"&&st!==filtroStatus)return false;
-    if(filtroSistema!=="todos"&&!(c.casos||[]).some(ca=>ca.sistema===filtroSistema))return false;
-    const q=busquedaActiva.toLowerCase();
-    return!q||c.nombre.toLowerCase().includes(q)||(c.alienNum||"").replace(/\D/g,"").includes(q.replace(/\D/g,""));
-  }).sort((a,b)=>{
-    if(sortBy==="fecha"){const fa=getPróximaFecha(a),fb=getPróximaFecha(b);if(!fa)return 1;if(!fb)return -1;return new Date(fa)-new Date(fb);}
-    return a.nombre.localeCompare(b.nombre);
-  });
+  const filtered=(()=>{
+    if(busquedaActiva.trim()){
+      const q=busquedaActiva.trim().toLowerCase();
+      return clientes.filter(c=>
+        c.nombre.toLowerCase().includes(q)||
+        (c.alienNum||"").replace(/\D/g,"").includes(q.replace(/\D/g,""))
+      );
+    }
+    return clientes.filter(c=>{
+      const st=getStatusCliente(c);
+      if(filtroStatus!=="todos"&&st!==filtroStatus)return false;
+      if(filtroSistema!=="todos"&&!(c.casos||[]).some(ca=>ca.sistema===filtroSistema))return false;
+      return true;
+    }).sort((a,b)=>{
+      if(sortBy==="fecha"){const fa=getPróximaFecha(a),fb=getPróximaFecha(b);if(!fa)return 1;if(!fb)return -1;return new Date(fa)-new Date(fb);}
+      return a.nombre.localeCompare(b.nombre);
+    });
+  })();
 
   const cnt=(s,sys="todos")=>clientes.filter(c=>(sys==="todos"||(c.casos||[]).some(ca=>ca.sistema===sys))&&(s==="todos"||getStatusCliente(c)===s)).length;
 
@@ -1007,29 +1015,22 @@ const loadTeam=async()=>{
             </button>
           ))}
         </div>
-        <div style={{flex:1,position:"relative",display:"flex",gap:6}}>
-          <div style={{flex:1,position:"relative"}}>
-            <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#94A3B8",fontSize:14}}>🔍</span>
-            <input
-              value={busqueda}
-              onChange={e=>setBusqueda(e.target.value)}
-              onKeyDown={e=>{if(e.key==="Enter"){setBusquedaActiva(busqueda);}}}
-              placeholder={t("Nombre del cliente o A#...","Client name or A#...")}
-              style={{width:"100%",padding:"9px 14px 9px 36px",borderRadius:8,border:"1px solid #E2E8F0",fontSize:13,background:"#F8FAFC",outline:"none",boxSizing:"border-box"}}
-            />
-            {busquedaActiva&&(
-              <button
-                onClick={()=>{setBusqueda("");setBusquedaActiva("");}}
-                style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#94A3B8",fontSize:16,lineHeight:1,padding:"2px 4px"}}
-              >✕</button>
-            )}
-          </div>
+        <div style={{flex:1,display:"flex",gap:6,alignItems:"center"}}>
+          <input
+            value={busqueda}
+            onChange={e=>setBusqueda(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&setBusquedaActiva(busqueda)}
+            placeholder={t("Nombre del cliente o A#...","Client name or A#...")}
+            style={{flex:1,padding:"9px 14px",borderRadius:8,border:"1px solid #E2E8F0",fontSize:13,background:"#F8FAFC",outline:"none"}}
+          />
           <button
             onClick={()=>setBusquedaActiva(busqueda)}
-            style={{padding:"9px 18px",borderRadius:8,border:"none",background:"#1E40AF",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}
-          >
-            🔍 {t("Buscar","Search")}
-          </button>
+            style={{padding:"9px 20px",borderRadius:8,border:"none",background:"#1E40AF",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}
+          >{t("Buscar","Search")}</button>
+          {busquedaActiva&&<button
+            onClick={()=>{setBusqueda("");setBusquedaActiva("");}}
+            style={{padding:"9px 14px",borderRadius:8,border:"1px solid #E2E8F0",background:"#fff",color:"#374151",fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}
+          >{t("Ver todos","Show all")}</button>}
         </div>
         <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{padding:"9px 12px",borderRadius:8,border:"1px solid #E2E8F0",fontSize:13,background:"#fff",cursor:"pointer",color:"#374151"}}>
           <option value="fecha">{t("Por fecha","By date")}</option>
