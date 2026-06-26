@@ -740,7 +740,7 @@ const loadTeam=async()=>{
     setAddUserLoading(false);
   };
 
-  const filtered=(()=>{
+  const filtered=React.useMemo(()=>{
     if(busquedaActiva.trim()){
       const q=busquedaActiva.trim().toLowerCase();
       return clientes.filter(c=>
@@ -757,7 +757,7 @@ const loadTeam=async()=>{
       if(sortBy==="fecha"){const fa=getPróximaFecha(a),fb=getPróximaFecha(b);if(!fa)return 1;if(!fb)return -1;return new Date(fa)-new Date(fb);}
       return a.nombre.localeCompare(b.nombre);
     });
-  })();
+  },[busquedaActiva,clientes,filtroStatus,filtroSistema,sortBy]);
 
   const cnt=(s,sys="todos")=>clientes.filter(c=>(sys==="todos"||(c.casos||[]).some(ca=>ca.sistema===sys))&&(s==="todos"||getStatusCliente(c)===s)).length;
 
@@ -1110,7 +1110,10 @@ const loadTeam=async()=>{
         </div>
       ):(
         <div style={{display:"grid",gap:8}}>
-          {filtered.map(c=>{
+          {(busquedaActiva.trim()
+            ? clientes.filter(c=>c.nombre.toLowerCase().includes(busquedaActiva.trim().toLowerCase())||(c.alienNum||"").toLowerCase().includes(busquedaActiva.trim().toLowerCase()))
+            : filtered
+          ).map(c=>{
             const st=getStatusCliente(c);const scfg=STATUS_CONFIG[st];const pf=getPróximaFecha(c);const dias=pf?getDias(pf):null;const exp=expandedId===c.id;
             const totalP=(c.casos||[]).reduce((s,ca)=>s+getTotalProcesos(ca.procesos||[]),0);
             const pagadoP=(c.casos||[]).reduce((s,ca)=>s+getTotalPagado(ca.procesos||[]),0);
