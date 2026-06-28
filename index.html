@@ -335,31 +335,37 @@ function App(){
 
 const assignExpedientes=async()=>{
   try{
-    const{db,collection,getDocs,query,where,orderBy,updateDoc,doc}=window._firebase;
+    const{db,collection,getDocs,query,where,updateDoc,doc}=window._firebase;
     const officeId=officeData?.id||userData?.officeId;
+    // No orderBy to avoid composite index requirement — sort in JS
     let q;
     if(officeId){
-      q=query(collection(db,"clientes"),where("officeId","==",officeId),orderBy("createdAt","asc"));
+      q=query(collection(db,"clientes"),where("officeId","==",officeId));
     }else{
-      q=query(collection(db,"clientes"),orderBy("createdAt","asc"));
+      q=collection(db,"clientes");
     }
     const snap=await getDocs(q);
-    const sinExp=snap.docs.filter(d=>!d.data().expediente);
+    // Sort by createdAt in JS
+    const sorted=snap.docs.slice().sort((a,b)=>{
+      const fa=a.data().createdAt||"";
+      const fb=b.data().createdAt||"";
+      return fa.localeCompare(fb);
+    });
     // Find current max exp number
-    const conExp=snap.docs.filter(d=>d.data().expediente);
-    let maxNum=conExp.reduce((max,d)=>{
+    let maxNum=sorted.reduce((max,d)=>{
       const n=parseInt((d.data().expediente||"").replace("EXP-",""))||0;
       return n>max?n:max;
     },0);
-    // Assign to those without
+    // Assign only to those without expediente
+    const sinExp=sorted.filter(d=>!d.data().expediente);
     for(const d of sinExp){
       maxNum++;
       const expNum="EXP-"+String(maxNum).padStart(4,"0");
       await updateDoc(doc(db,"clientes",d.id),{expediente:expNum});
     }
     await loadCases();
-    showToastFn("Expedientes asignados ✓");
-  }catch(e){console.error(e);showToastFn("Error asignando expedientes","error");}
+    showToastFn(`Expedientes asignados — ${sinExp.length} clientes actualizados ✓`);
+  }catch(e){console.error("assignExpedientes error:",e);showToastFn("Error: "+e.message,"error");}
 };
 
 
@@ -1179,8 +1185,7 @@ const loadTeam=async()=>{
                   </div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
-                      <span style={{fontWeight:700,fontSize:15,color:"#0F172A"}}>{c.nombre}</span>
-                      {c.expediente&&<span style={{fontSize:11,color:"#64748B",fontWeight:500,background:"#F1F5F9",borderRadius:4,padding:"2px 6px",marginLeft:6}}>{c.expediente}</span>}
+                      {c.expediente&&<span style={{fontSize:11,color:"#0C447C",fontWeight:600,background:"#E6F1FB",borderRadius:4,padding:"2px 7px",marginRight:8,fontFamily:"monospace"}}>{c.expediente}</span>}<span style={{fontWeight:700,fontSize:15,color:"#0F172A"}}>{c.nombre}</span>
                       <Badge cfg={scfg} label={scfg.label}/>
                       {(()=>{
                         const tieneUSCIS=(c.casos||[]).some(ca=>ca.sistema==="uscis"||ca.sistema==="foia");
