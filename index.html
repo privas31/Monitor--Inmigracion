@@ -38,7 +38,7 @@
     const db = getFirestore(app);
     const storage = getStorage(app);
     window._firebase = { auth, db, storage, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, getDoc, ref, uploadBytesResumable, getDownloadURL };
-    console.log("%cImmigPath Monitor Personal — versión 2026-07-07-A","background:#0C447C;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
+    console.log("%cImmigPath Monitor Personal — versión 2026-07-07-B","background:#0C447C;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
 
     // Cargar logo y nombre de oficina desde ?o= antes del login
     (async()=>{
@@ -2142,12 +2142,30 @@ const loadTeam=async()=>{
                             {ca.sistema==="foia"&&ca.foiaRespuesta&&<div style={{gridColumn:"1/-1"}}><div style={{fontSize:11,color:"#94A3B8",textTransform:"uppercase"}}>Respuesta FOIA</div><div style={{fontSize:13,color:"#475569",fontStyle:"italic"}}>📝 {ca.foiaRespuesta}</div></div>}
 
                             
-                            {(ca.tipoCaso||"").includes("I-765")&&ca.tieneEAD&&<div style={{gridColumn:"1/-1",background:ca.tieneEAD==="si"?"#F0FDF4":"#FEF2F2",border:`1px solid ${ca.tieneEAD==="si"?"#BBF7D0":"#FECACA"}`,borderRadius:8,padding:"9px 12px"}}>
-                              <div style={{fontSize:12,fontWeight:700,color:ca.tieneEAD==="si"?"#15803D":"#DC2626",marginBottom:ca.eadVence?6:0}}>{ca.tieneEAD==="si"?"✅ Tiene EAD":"❌ Sin EAD — Puede aplicar"}</div>
-                              {ca.eadVence&&<div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
-                                <div><div style={{fontSize:10,color:"#6B7280",textTransform:"uppercase"}}>{ca.tieneEAD==="si"?"Vence":"Puede aplicar el"}</div><div style={{fontSize:13,fontWeight:700,color:ca.tieneEAD==="si"&&getDias(ca.eadVence)!==null&&getDias(ca.eadVence)<=30?"#DC2626":"#15803D"}}>{fmt(ca.eadVence)}{ca.tieneEAD==="si"&&getDias(ca.eadVence)!==null&&getDias(ca.eadVence)<=30&&" ⚠️"}</div></div>
-                                {ca.tieneEAD==="si"&&ca.eadRenovado&&<div><div style={{fontSize:10,color:"#6B7280",textTransform:"uppercase"}}>Renovacion</div><div style={{fontSize:12,fontWeight:600,color:ca.eadRenovado==="si"?"#15803D":"#D97706"}}>{ca.eadRenovado==="si"?"✅ Renovado":"⏳ Pendiente renovar"}</div></div>}
-                              </div>}
+                            {(ca.tipoCaso||"").includes("I-765")&&ca.eadVence?(()=>{
+                              const diasEAD=getDias(ca.eadVence);
+                              const esAplicar=ca.tieneEAD==="no";
+                              const vencido=!esAplicar&&diasEAD<0;
+                              const colorD=esAplicar?(diasEAD<=0?"#4ADE80":"#93C5FD"):vencido?"#F87171":diasEAD<=30?"#F87171":diasEAD<=90?"#FBBF24":"#4ADE80";
+                              const estadoTxt=esAplicar?(diasEAD<=0?"✅ YA PUEDE APLICAR":"⏳ PENDIENTE APLICAR"):vencido?"🔴 VENCIDO":diasEAD<=90?"🟡 POR VENCER":"🟢 VIGENTE";
+                              const pctEAD=esAplicar?null:Math.max(0,Math.min(100,Math.round((diasEAD/365)*100)));
+                              return(<div style={{gridColumn:"1/-1",background:"#052E16",borderRadius:12,padding:"14px 16px"}}>
+                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                                  <span style={{fontSize:13,fontWeight:500,color:"#86EFAC"}}>🪪 Permiso de Trabajo (EAD)</span>
+                                  <span style={{fontSize:11,fontWeight:600,color:colorD}}>{estadoTxt}</span>
+                                </div>
+                                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+                                  <span style={{fontSize:24,fontWeight:500,color:colorD,whiteSpace:"nowrap"}}>{vencido?`${Math.abs(diasEAD)} días vencido`:`${diasEAD} días`}</span>
+                                  {pctEAD!==null&&<div style={{flex:1,background:"rgba(255,255,255,0.08)",borderRadius:20,height:5,overflow:"hidden"}}><div style={{height:"100%",borderRadius:20,background:colorD,width:`${pctEAD}%`}}/></div>}
+                                </div>
+                                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#86EFAC"}}>
+                                  <span>{esAplicar?"Puede aplicar al EAD":"Vencimiento del EAD"}: {fmt(ca.eadVence)}</span>
+                                  {!esAplicar&&!vencido&&diasEAD<=90&&<span style={{color:"#FBBF24"}}>⚠️ Renovar pronto</span>}
+                                </div>
+                                {!esAplicar&&ca.eadRenovado&&<div style={{borderTop:"0.5px solid rgba(255,255,255,0.06)",paddingTop:8,marginTop:8,fontSize:11,color:ca.eadRenovado==="si"?"#4ADE80":"#FBBF24"}}>{ca.eadRenovado==="si"?"✅ Renovación presentada":"⏳ Renovación pendiente de presentar"}</div>}
+                              </div>);
+                            })():(ca.tipoCaso||"").includes("I-765")&&ca.tieneEAD&&<div style={{gridColumn:"1/-1",background:ca.tieneEAD==="si"?"#F0FDF4":"#FEF2F2",border:`1px solid ${ca.tieneEAD==="si"?"#BBF7D0":"#FECACA"}`,borderRadius:8,padding:"9px 12px"}}>
+                              <div style={{fontSize:12,fontWeight:700,color:ca.tieneEAD==="si"?"#15803D":"#DC2626"}}>{ca.tieneEAD==="si"?"✅ Tiene EAD":"❌ Sin EAD — Puede aplicar"}</div>
                             </div>}
 
                             {ca.nota&&<div style={{gridColumn:"1/-1"}}><div style={{fontSize:10,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3,fontWeight:600}}>{t("Notas","Notes")}</div><div style={{fontSize:13,color:"#475569",fontStyle:"italic"}}>📝 {ca.nota}</div></div>}
