@@ -38,7 +38,7 @@
     const db = getFirestore(app);
     const storage = getStorage(app);
     window._firebase = { auth, db, storage, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, getDoc, ref, uploadBytesResumable, getDownloadURL };
-    console.log("%cImmigPath Monitor Personal — versión 2026-07-07-G","background:#0C447C;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
+    console.log("%cImmigPath Monitor Personal — versión 2026-07-07-H","background:#0C447C;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
 
     // Cargar logo y nombre de oficina desde ?o= antes del login
     (async()=>{
@@ -89,6 +89,7 @@ const ESTATUS_USCIS_POR_FORM={
     {en:"Decision Was Mailed",es:"Decisión enviada",p:"atencion"},
     {en:"Case Was Approved",es:"Asilo aprobado",p:"completado"},
     {en:"Case Was Denied",es:"Asilo negado",p:"critico"},
+    {en:"Case Was Closed",es:"Caso cerrado",p:"normal"},
     {en:"Case Was Referred To Immigration Court",es:"Referido a corte de inmigración",p:"critico"},
   ],
   "I-765 Permiso de trabajo":[
