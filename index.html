@@ -2000,7 +2000,7 @@ const loadTeam=async()=>{
                             {ca.sistema==="uscis"&&ca.estatusCaso&&<div><div style={{fontSize:10,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3,fontWeight:600}}>{t("Estado","Status")}</div><div style={{display:"inline-block",padding:"4px 12px",borderRadius:20,fontSize:12,fontWeight:700,background:ca.estatusCaso==="activo"?"#F0FDF4":ca.estatusCaso==="referido_eoir"?"#F5F3FF":ca.estatusCaso==="aprobado"?"#F0F9FF":"#FEF2F2",color:ca.estatusCaso==="activo"?"#16A34A":ca.estatusCaso==="referido_eoir"?"#7C3AED":ca.estatusCaso==="aprobado"?"#0369A1":"#DC2626",border:`1px solid ${ca.estatusCaso==="activo"?"#BBF7D0":ca.estatusCaso==="referido_eoir"?"#DDD6FE":ca.estatusCaso==="aprobado"?"#BAE6FD":"#FECACA"}`}}>{ca.estatusCaso==="activo"?"✅ Caso Activo":ca.estatusCaso==="referido_eoir"?"🔒 Cerrado — Referido a EOIR":ca.estatusCaso==="aprobado"?"🔒 Cerrado — Aprobado":"🔒 Cerrado — Denegado"}</div></div>}
 
                             
-                            {(ca.sistema==="uscis"&&(ca.tipoCaso||"").includes("I-589")||ca.sistema==="eoir"&&(ca.tipoCaso||"").toLowerCase().includes("asilo"))&&ca.fechaAsilo&&(()=>{
+                            {(ca.sistema==="uscis"&&(ca.tipoCaso||"").includes("I-589")||ca.sistema==="eoir")&&ca.fechaAsilo&&(()=>{
                               const inicio=new Date(ca.fechaAsilo+"T00:00:00");const hoy=new Date();hoy.setHours(0,0,0,0);
                               // Clock pause logic
                               const relojDetenido = ca.relojDetenido === true;
