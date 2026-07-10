@@ -149,21 +149,33 @@ const descEstatusUscis=(est)=>{const m=ESTATUS_USCIS.find(s=>s.en===est);return 
 const prioEstatusUscis=(est)=>{const m=ESTATUS_USCIS.find(s=>s.en===est);return m?m.p:"normal";};
 const PRIO_LABEL={completado:"Completado",normal:"Normal",atencion:"Atención",urgente:"Urgente",critico:"Crítico"};
 const ESTATUS_EOIR=[
+  // ── Inicio del caso ──────────────────────────────
+  {en:"Case Is Pending",es:"Caso pendiente — sin fecha de audiencia",p:"normal"},
+  {en:"Notice To Appear Issued",es:"Aviso de comparecencia emitido (NTA)",p:"atencion"},
   {en:"Case Received And Pending",es:"Caso recibido en corte",p:"normal"},
-  {en:"Hearing Scheduled",es:"Audiencia programada",p:"urgente"},
-  {en:"Hearing Rescheduled",es:"Audiencia reprogramada",p:"urgente"},
-  {en:"Hearing Completed - Decision Pending",es:"Audiencia completada - decisión pendiente",p:"atencion"},
-  {en:"Case Was Granted",es:"Caso aprobado por corte",p:"completado"},
-  {en:"Case Was Denied",es:"Caso negado por corte",p:"critico"},
-  {en:"Case Was Dismissed",es:"Caso desestimado",p:"critico"},
   {en:"Case Administratively Closed",es:"Caso cerrado administrativamente",p:"normal"},
-  {en:"Appeal Filed",es:"Apelación presentada",p:"atencion"},
-  {en:"Appeal Decision Issued",es:"Decisión de apelación emitida",p:"urgente"},
-  {en:"Case Remanded",es:"Caso devuelto a corte inferior",p:"atencion"},
+  // ── Master Calendar Hearing ───────────────────────
+  {en:"Master Calendar Hearing Scheduled",es:"Master Hearing programado",p:"urgente"},
+  {en:"Master Calendar Hearing Completed",es:"Master Hearing completado",p:"atencion"},
+  {en:"Master Calendar Hearing Rescheduled",es:"Master Hearing reprogramado",p:"urgente"},
+  // ── Individual / Merits Hearing ───────────────────
+  {en:"Individual Hearing Scheduled",es:"Individual / Merits Hearing programado",p:"urgente"},
+  {en:"Individual Hearing Completed - Decision Pending",es:"Individual Hearing completado — decisión pendiente",p:"atencion"},
+  {en:"Individual Hearing Rescheduled",es:"Individual Hearing reprogramado",p:"urgente"},
+  // ── Decisión del juez ─────────────────────────────
+  {en:"Case Was Granted",es:"Asilo concedido por el juez",p:"completado"},
+  {en:"Case Was Denied",es:"Caso negado por el juez",p:"critico"},
+  {en:"Case Was Dismissed",es:"Caso desestimado",p:"critico"},
   {en:"Voluntary Departure Granted",es:"Salida voluntaria concedida",p:"normal"},
   {en:"Order of Removal Issued",es:"Orden de remoción emitida",p:"critico"},
-  {en:"Case Was Scheduled For A Hearing",es:"Caso programado para audiencia",p:"urgente"},
-  {en:"Notice To Appear Issued",es:"Aviso de comparecencia emitido",p:"atencion"},
+  {en:"Case Remanded",es:"Caso devuelto — nueva audiencia requerida",p:"atencion"},
+  // ── Apelaciones ───────────────────────────────────
+  {en:"BIA Appeal Filed",es:"Apelación presentada ante la BIA",p:"atencion"},
+  {en:"BIA Appeal Decision Pending",es:"BIA — decisión pendiente",p:"atencion"},
+  {en:"BIA Appeal Granted",es:"BIA — apelación concedida",p:"completado"},
+  {en:"BIA Appeal Denied",es:"BIA — apelación negada",p:"critico"},
+  {en:"BIA Remanded To Immigration Court",es:"BIA devuelve el caso a corte de inmigración",p:"atencion"},
+  {en:"Federal Court Petition Filed",es:"Petición presentada en corte federal (Circuito)",p:"atencion"},
 ];
 const colorEstatusEoir=(est)=>{const m=ESTATUS_EOIR.find(s=>s.en===est);return m?PRIO_COLOR[m.p]||"#7C3AED":"#7C3AED";};
 const descEstatusEoir=(est)=>{const m=ESTATUS_EOIR.find(s=>s.en===est);return m?m.es:"";};
