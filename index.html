@@ -221,6 +221,7 @@ function getStatusConfig(){return{
   urgente:{label:t("Urgente","Urgent"),color:"#D97706",bg:"#FFFBEB",border:"#FDE68A",icon:"🟡"},
   proximo:{label:t("Próxima","Upcoming"),color:"#2563EB",bg:"#EFF6FF",border:"#BFDBFE",icon:"🔵"},
   ok:{label:t("Al día","On Track"),color:"#16A34A",bg:"#F0FDF4",border:"#BBF7D0",icon:"🟢"},
+  deportado:{label:t("Deportado/Removido","Deported/Removed"),color:"#DC2626",bg:"#FEE2E2",border:"#FECACA",icon:"🚫"},
   pendiente:{label:t("Pendiente","Pending"),color:"#6B7280",bg:"#F9FAFB",border:"#E5E7EB",icon:"⚪"},
 };}
 const STATUS_CONFIG = getStatusConfig();
@@ -241,7 +242,7 @@ function getTotalPagado(procesos){return(procesos||[]).reduce((s,p)=>s+parseMone
 function getWPTotal(ca){return((ca&&ca.wpDependientes)||[]).reduce((s,w)=>s+parseMoney(w.precio),0);}
 function getWPPagado(ca){return((ca&&ca.wpDependientes)||[]).reduce((s,w)=>s+parseMoney(w.pagado),0);}
 function getPróximaFecha(cliente){const fechas=[];(cliente.casos||[]).forEach(c=>{if(c.fechaCorte)fechas.push(c.fechaCorte);if(c.fechaHuellas)fechas.push(c.fechaHuellas);});if(!fechas.length)return null;const hoy=new Date();hoy.setHours(0,0,0,0);const futuras=fechas.filter(f=>new Date(f+"T00:00:00")>=hoy).sort();if(futuras.length)return futuras[0];return fechas.sort().reverse()[0];}
-function getStatusCliente(cliente){const pf=getPróximaFecha(cliente);if(!pf)return"pendiente";return getStatus(pf);}
+function getStatusCliente(cliente){if(cliente.deportado===true)return"deportado";const pf=getPróximaFecha(cliente);if(!pf)return"pendiente";return getStatus(pf);}
 
 const PAISES=["Afghanistan","Albania","Algeria","Angola","Argentina","Armenia","Azerbaijan","Bahamas","Bangladesh","Belarus","Belize","Bolivia","Brazil","Bulgaria","Burkina Faso","Burma (Myanmar)","Burundi","Cambodia","Cameroon","Chad","Chile","China","Colombia","Congo (DRC)","Costa Rica","Cuba","Dominican Republic","Ecuador","Egypt","El Salvador","Eritrea","Ethiopia","Georgia","Ghana","Guatemala","Guinea","Haiti","Honduras","India","Indonesia","Iran","Iraq","Jamaica","Jordan","Kazakhstan","Kenya","Kosovo","Kyrgyzstan","Lebanon","Liberia","Libya","Mali","Mauritania","Mexico","Moldova","Morocco","Mozambique","Nepal","Nicaragua","Niger","Nigeria","Pakistan","Panama","Paraguay","Peru","Philippines","Romania","Russia","Rwanda","Senegal","Sierra Leone","Somalia","South Sudan","Sri Lanka","Sudan","Syria","Tajikistan","Tanzania","Togo","Trinidad and Tobago","Turkey","Turkmenistan","Uganda","Ukraine","Uzbekistan","Venezuela","Vietnam","Yemen","Zimbabwe","Other"].sort();
 const COUNTRY_CODE={"Mexico":"mx","Guatemala":"gt","Honduras":"hn","El Salvador":"sv","Cuba":"cu","Haiti":"ht","Venezuela":"ve","Colombia":"co","Ecuador":"ec","Peru":"pe","Nicaragua":"ni","Dominican Republic":"do","Brazil":"br","Bolivia":"bo","Argentina":"ar","Chile":"cl","Jamaica":"jm","China":"cn","India":"in","Pakistan":"pk","Philippines":"ph","Vietnam":"vn","Ukraine":"ua","Russia":"ru","Ethiopia":"et","Somalia":"so","Nigeria":"ng","Ghana":"gh","Cameroon":"cm","Senegal":"sn","Syria":"sy","Iraq":"iq","Iran":"ir","Afghanistan":"af"};
@@ -1194,6 +1195,28 @@ const loadTeam=async()=>{
   };
 
   const handleDelete=async(id)=>{try{const{db,doc,deleteDoc}=window._firebase;await deleteDoc(doc(db,"clientes",id));setClientes(prev=>prev.filter(c=>c.id!==id));showToastFn("Cliente eliminado");}catch(e){showToastFn("Error","error");}setConfirmDelete(null);};
+  React.useEffect(()=>{
+    window._markDeportado=async(id)=>{
+      if(!window.confirm(t("¿Marcar este cliente como deportado/removido?","Mark this client as deported/removed?")))return;
+      try{
+        const{db,doc,updateDoc}=window._firebase;
+        const hoy=new Date().toISOString().split("T")[0];
+        const por=userData?.displayName||user?.email||"sistema";
+        await updateDoc(doc(db,"clientes",id),{deportado:true,fechaDeportacion:hoy,deportadoPor:por});
+        setClientes(prev=>prev.map(c=>c.id===id?{...c,deportado:true,fechaDeportacion:hoy,deportadoPor:por}:c));
+        showToastFn(t("Cliente marcado como deportado ✓","Client marked as deported ✓"));
+      }catch(e){showToastFn(t("Error al actualizar","Update error"),"error");}
+    };
+    window._unmarkDeportado=async(id)=>{
+      if(!window.confirm(t("¿Reactivar este cliente?","Reactivate this client?")))return;
+      try{
+        const{db,doc,updateDoc}=window._firebase;
+        await updateDoc(doc(db,"clientes",id),{deportado:false,fechaDeportacion:null,deportadoPor:null});
+        setClientes(prev=>prev.map(c=>c.id===id?{...c,deportado:false,fechaDeportacion:null,deportadoPor:null}:c));
+        showToastFn(t("Cliente reactivado ✓","Client reactivated ✓"));
+      }catch(e){showToastFn(t("Error al actualizar","Update error"),"error");}
+    };
+  },[userData,user]);
   const handleAddUser=async()=>{
     if(!newUserEmail||!newUserPass||!newUserName){setAddUserMsg("❌ Completa todos los campos");return;}
     setAddUserLoading(true);setAddUserMsg("");
@@ -1248,7 +1271,7 @@ const loadTeam=async()=>{
   const stats=React.useMemo(()=>{
     const hoy=new Date();hoy.setHours(0,0,0,0);
     const en7dias=new Date(hoy);en7dias.setDate(en7dias.getDate()+7);
-    const alertas=clientes.filter(c=>{const pf=getPróximaFecha(c);if(!pf)return false;const d=new Date(pf+"T00:00:00");return d>=hoy&&d<=en7dias;});
+    const alertas=clientes.filter(c=>{if(c.deportado)return false;const pf=getPróximaFecha(c);if(!pf)return false;const d=new Date(pf+"T00:00:00");return d>=hoy&&d<=en7dias;});
     const alertas1dia=alertas.filter(c=>{const pf=getPróximaFecha(c);return getDias(pf)===0||getDias(pf)===1;});
     const alertas3dias=alertas.filter(c=>{const pf=getPróximaFecha(c);const d=getDias(pf);return d>1&&d<=3;});
     const alertas7dias=alertas.filter(c=>{const pf=getPróximaFecha(c);const d=getDias(pf);return d>3&&d<=7;});
@@ -1809,12 +1832,17 @@ const loadTeam=async()=>{
             const pct=getPct(totalP,pagadoP);const pc=pagoColor(pct);
             const casoTab=activeCasoTab[c.id]||0;
             return(
-              <div key={c.id} style={{background:"#fff",borderRadius:12,border:"1px solid #E2E8F0",borderLeft:`4px solid ${scfg.color}`,boxShadow:"0 1px 3px rgba(0,0,0,0.04)",overflow:"hidden",transition:"box-shadow 0.15s"}} onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 12px rgba(0,0,0,0.08)"} onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.04)"}>
+              <div key={c.id} style={{background:c.deportado?"#FFF8F8":"#fff",borderRadius:12,border:c.deportado?"1.5px solid #FECACA":"1px solid #E2E8F0",borderLeft:c.deportado?"4px solid #DC2626":`4px solid ${scfg.color}`,boxShadow:"0 1px 3px rgba(0,0,0,0.04)",overflow:"hidden",transition:"box-shadow 0.15s"}} onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 12px rgba(0,0,0,0.08)"} onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.04)"}>
                 <div style={{padding:"16px 20px",display:"flex",gap:16,alignItems:"center",cursor:"pointer"}} onClick={()=>{const nExp=exp?null:c.id;setExpandedId(nExp);setActiveCasoTab({});if(nExp)cargarPagosCliente(nExp);}}>
-                  <div style={{width:44,height:44,borderRadius:"50%",background:`linear-gradient(135deg,${scfg.color}22,${scfg.color}44)`,border:`2px solid ${scfg.color}33`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:16,color:scfg.color,flexShrink:0}}>
+                  <div style={{width:44,height:44,borderRadius:"50%",background:c.deportado?"#FEE2E2":`linear-gradient(135deg,${scfg.color}22,${scfg.color}44)`,border:c.deportado?"2px solid #FECACA":`2px solid ${scfg.color}33`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:16,color:c.deportado?"#DC2626":scfg.color,flexShrink:0}}>
                     {c.nombre.split(" ").slice(0,2).map(w=>w[0]||"").join("").toUpperCase()}
                   </div>
                   <div style={{flex:1,minWidth:0}}>
+                    {c.deportado&&<div style={{background:"#FEE2E2",border:"1px solid #FECACA",borderRadius:6,padding:"5px 10px",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{fontSize:13}}>🚫</span>
+                      <span style={{fontSize:12,fontWeight:700,color:"#DC2626"}}>{t("Deportado/Removido","Deported/Removed")}</span>
+                      {c.fechaDeportacion&&<span style={{fontSize:11,color:"#EF4444"}}>· {c.fechaDeportacion}</span>}
+                    </div>}
                     <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
                       {c.expediente&&<span style={{fontSize:11,color:"#0C447C",fontWeight:600,background:"#E6F1FB",borderRadius:4,padding:"2px 7px",marginRight:8,fontFamily:"monospace"}}>{c.expediente}</span>}<span style={{fontWeight:700,fontSize:15,color:"#0F172A"}}>{c.nombre}</span>
                       <Badge cfg={scfg} label={scfg.label}/>
@@ -1914,7 +1942,11 @@ const loadTeam=async()=>{
                             <span>💳</span> Cobrar cliente
                           </button>
                           <div style={{height:"1px",background:"#F1F5F9"}}></div>
-                          <button onClick={e=>{e.stopPropagation();setConfirmDelete(c.id);setOpenMenuId(null);}} style={{width:"100%",padding:"10px 14px",background:"none",border:"none",textAlign:"left",fontSize:13,color:"#EF4444",cursor:"pointer",display:"flex",alignItems:"center",gap:10}} onMouseEnter={e=>e.target.style.background="#FEF2F2"} onMouseLeave={e=>e.target.style.background="none"}>
+                          <button onClick={e=>{e.stopPropagation();c.deportado?window._unmarkDeportado(c.id):window._markDeportado(c.id);setOpenMenuId(null);}} style={{width:"100%",padding:"10px 14px",background:"none",border:"none",textAlign:"left",fontSize:13,color:c.deportado?"#16A34A":"#DC2626",cursor:"pointer",display:"flex",alignItems:"center",gap:10}} onMouseEnter={e=>e.target.style.background=c.deportado?"#F0FDF4":"#FEF2F2"} onMouseLeave={e=>e.target.style.background="none"}>
+                              {c.deportado?"↩️ Reactivar cliente":"🚫 Marcar como deportado"}
+                            </button>
+                            <div style={{height:"1px",background:"#F1F5F9"}}></div>
+                            <button onClick={e=>{e.stopPropagation();setConfirmDelete(c.id);setOpenMenuId(null);}} style={{width:"100%",padding:"10px 14px",background:"none",border:"none",textAlign:"left",fontSize:13,color:"#EF4444",cursor:"pointer",display:"flex",alignItems:"center",gap:10}} onMouseEnter={e=>e.target.style.background="#FEF2F2"} onMouseLeave={e=>e.target.style.background="none"}>
                             <span>🗑</span> Eliminar cliente
                           </button>
                         </div>
