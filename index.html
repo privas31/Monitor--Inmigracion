@@ -38,7 +38,7 @@
     const db = getFirestore(app);
     const storage = getStorage(app);
     window._firebase = { auth, db, storage, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, getDoc, ref, uploadBytesResumable, getDownloadURL };
-    console.log("%cImmigPath Monitor Personal — versión 2026-07-07-K","background:#0C447C;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
+    console.log("%cImmigPath Monitor Personal — versión 2026-07-07-L","background:#0C447C;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
 
     // Cargar logo y nombre de oficina desde ?o= antes del login
     (async()=>{
@@ -1766,15 +1766,6 @@ const loadTeam=async()=>{
           <button onClick={openAdd} style={{background:"#2563EB",color:"#fff",border:"none",borderRadius:8,padding:"9px 20px",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
           + {t("Nuevo Cliente","New Client")}
         </button>
-      </div>
-      <div style={{background:"#fff",borderBottom:"1px solid #F1F5F9",padding:"0 32px",display:"flex",gap:6,overflowX:"auto"}}>
-        {[["vencido","🔴",t("Vencidas","Overdue"),"#FEF2F2","#DC2626"],["hoy","🟠",t("Hoy","Today"),"#FFF7ED","#EA580C"],["urgente","🟡",t("Urgentes","Urgent"),"#FFFBEB","#D97706"],["proximo","🔵",t("Próximas","Upcoming"),"#EFF6FF","#2563EB"],["ok","🟢",t("Al día","On Track"),"#F0FDF4","#16A34A"],["pendiente","⚪",t("Sin fecha","No Date"),"#F8FAFC","#64748B"]].map(([k,icon,label,bg,color])=>(
-          <button key={k} onClick={()=>setFiltroStatus(filtroStatus===k?"todos":k)} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",background:filtroStatus===k?bg:"transparent",border:"none",borderBottom:filtroStatus===k?"2px solid "+color:"2px solid transparent",color:filtroStatus===k?color:"#94A3B8",cursor:"pointer",fontSize:12,fontWeight:filtroStatus===k?700:400,whiteSpace:"nowrap",flexShrink:0}}>
-            <span>{icon}</span>
-            <span style={{fontWeight:700,fontSize:14}}>{cnt(k,filtroSistema==="todos"?"todos":filtroSistema)}</span>
-            <span>{label}</span>
-          </button>
-        ))}
       </div>
       <div style={{padding:"32px 32px 48px"}}>
 
