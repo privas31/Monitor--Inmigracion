@@ -38,7 +38,7 @@
     const db = getFirestore(app);
     const storage = getStorage(app);
     window._firebase = { auth, db, storage, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, getDoc, ref, uploadBytesResumable, getDownloadURL };
-    console.log("%cImmigPath Monitor Personal — versión 2026-07-07-L","background:#0C447C;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
+    console.log("%cImmigPath Monitor Personal — versión 2026-07-07-M","background:#0C447C;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
 
     // Cargar logo y nombre de oficina desde ?o= antes del login
     (async()=>{
@@ -1744,10 +1744,10 @@ const loadTeam=async()=>{
             </div>
           )}
         </div>
-        <div style={{maxWidth:320,display:"flex",gap:6,alignItems:"center"}}>
-          <input value={busqueda} onChange={e=>setBusqueda(e.target.value)} onKeyDown={e=>e.key==="Enter"&&setBusquedaActiva(busqueda)} placeholder={t("Nombre del cliente o A#...","Client name or A#...")} style={{flex:1,padding:"9px 14px",borderRadius:8,border:"1px solid #E2E8F0",fontSize:13,background:"#F8FAFC",outline:"none"}}/>
-          <button onClick={()=>setBusquedaActiva(busqueda)} style={{padding:"9px 20px",borderRadius:8,border:"none",background:"#1E40AF",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{t("Buscar","Search")}</button>
-          {busquedaActiva&&<button onClick={()=>{setBusqueda("");setBusquedaActiva("");}} style={{padding:"9px 14px",borderRadius:8,border:"1px solid #E2E8F0",background:"#fff",color:"#374151",fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>{t("Ver todos","Show all")}</button>}
+        <div style={{flex:1,display:"flex",gap:6,alignItems:"center",minWidth:0}}>
+          <input value={busqueda} onChange={e=>setBusqueda(e.target.value)} onKeyDown={e=>e.key==="Enter"&&setBusquedaActiva(busqueda)} placeholder={t("Nombre del cliente o A#...","Client name or A#...")} style={{flex:1,padding:"9px 14px",borderRadius:8,border:"1px solid #E2E8F0",fontSize:13,background:"#F8FAFC",outline:"none",minWidth:0}}/>
+          <button onClick={()=>setBusquedaActiva(busqueda)} style={{padding:"9px 20px",borderRadius:8,border:"none",background:"#1E40AF",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{t("Buscar","Search")}</button>
+          {busquedaActiva&&<button onClick={()=>{setBusqueda("");setBusquedaActiva("");}} style={{padding:"9px 14px",borderRadius:8,border:"1px solid #E2E8F0",background:"#fff",color:"#374151",fontSize:13,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>✕ {t("Limpiar","Clear")}</button>}
         </div>
         <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{padding:"9px 12px",borderRadius:8,border:"1px solid #E2E8F0",fontSize:13,background:"#fff",cursor:"pointer",color:"#374151"}}>
           <option value="fecha">{t("Por fecha","By date")}</option>
