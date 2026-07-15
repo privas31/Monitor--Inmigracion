@@ -38,7 +38,7 @@
     const db = getFirestore(app);
     const storage = getStorage(app);
     window._firebase = { auth, db, storage, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, getDoc, ref, uploadBytesResumable, getDownloadURL };
-    console.log("%cImmigPath Monitor Personal — versión 2026-07-07-M","background:#0C447C;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
+    console.log("%cImmigPath Monitor Personal — versión 2026-07-07-N","background:#0C447C;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
 
     // Cargar logo y nombre de oficina desde ?o= antes del login
     (async()=>{
@@ -1987,8 +1987,8 @@ const loadTeam=async()=>{
                                 <button onClick={()=>abrirEnUscis(caso.recibo)} style={{background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #BFDBFE",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{t("Ver en USCIS","View on USCIS")} ↗</button>
                               </div>
                               <div style={{display:"grid",gridTemplateColumns:"1.4fr 1fr 0.9fr",gap:12}}>
-                                <div style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:12,padding:14}}>
-                                  <div style={{fontSize:13,fontWeight:700,color:"#0F172A",marginBottom:10}}>{t("Historial USCIS del caso","USCIS case history")}</div>
+                                <div style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:12,padding:14,maxHeight:260,overflowY:"auto"}}>
+                                  <div style={{fontSize:13,fontWeight:700,color:"#0F172A",marginBottom:10,position:"sticky",top:0,background:"#fff",paddingBottom:4}}>{t("Historial USCIS del caso","USCIS case history")}</div>
                                   {[...(caso.historial||[])].reverse().map((h,i,arr)=>(
                                     <div key={i} style={{display:"flex",gap:10}}>
                                       <div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
