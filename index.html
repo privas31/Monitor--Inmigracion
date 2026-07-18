@@ -38,7 +38,7 @@
     const db = getFirestore(app);
     const storage = getStorage(app);
     window._firebase = { auth, db, storage, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, getDoc, ref, uploadBytesResumable, getDownloadURL };
-    console.log("%cImmigPath Monitor Personal — versión 2026-07-07-P","background:#0C447C;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
+    console.log("%cImmigPath Monitor Personal — versión 2026-07-18-Q (header rediseño)","background:#2563EB;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
 
     // Cargar logo y nombre de oficina desde ?o= antes del login
     (async()=>{
@@ -1639,7 +1639,7 @@ const loadTeam=async()=>{
 
   // ── SIDEBAR NAV ITEMS ──────────────────────────────────────────────────────
   const navItems = [
-    {id:"monitor",   label:t("Monitor","Monitor"),  icon:"🖥", onClick:()=>{setActiveNav("monitor");}},
+    {id:"monitor",   label:t("Casos","Cases"),  icon:"💼", onClick:()=>{setActiveNav("monitor");}},
     {id:"checklist", label:t("Primeros pasos","Getting started"), icon:"🚀", onClick:()=>setShowChecklist(true)},
     {id:"alertas",   label:t("Alertas","Alerts"),                  icon:"🔔", badge: (stats.alertas.length+stats.vencidos.length+stats.eadElegibles.length+solicitudesServicio.length)||null, onClick:()=>setShowAlertas(true)},
     {id:"dashboard", label:t("Dashboard","Dashboard"),             icon:"📊", badge: isAdmin?(stats.alertas.length+stats.vencidos.length)||null:null, onClick:()=>setShowDashboard(true)},
@@ -1660,11 +1660,11 @@ const loadTeam=async()=>{
       <div style={{padding:"20px 20px 16px",borderBottom:"1px solid #F1F5F9"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           {officeLogo
-            ?<img src={officeLogo} alt="Logo" style={{height:36,width:36,borderRadius:10,objectFit:"contain",background:"rgba(255,255,255,0.1)",padding:3}}/>
-            :<div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#3B82F6,#1E40AF)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>⚖️</div>
+            ?<img src={officeLogo} alt="Logo" style={{height:38,width:38,borderRadius:10,objectFit:"contain",background:"#EFF6FF",padding:3,border:"1px solid #DBEAFE"}}/>
+            :<div style={{width:38,height:38,borderRadius:10,background:"#2563EB",display:"flex",alignItems:"center",justifyContent:"center",fontSize:19,boxShadow:"0 2px 6px rgba(37,99,235,0.35)"}}>⚖️</div>
           }
-          <div>
-            <div style={{fontWeight:800,fontSize:15,color:"#0F172A",letterSpacing:"-0.01em"}}>{officeName||"Mi Monitor"}</div>
+          <div style={{minWidth:0}}>
+            <div style={{fontWeight:800,fontSize:15,color:"#0F172A",letterSpacing:"-0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{officeName||"Mi Monitor"}</div>
             <div style={{fontSize:10,color:"#94A3B8",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>SERVICES</div>
           </div>
         </div>
@@ -1712,9 +1712,30 @@ const loadTeam=async()=>{
       </div>
     </div>
     <div style={{marginLeft:240,flex:1,minWidth:0}}>
-      <div style={{background:"#fff",borderBottom:"1px solid #E2E8F0",padding:"0 24px",display:"flex",alignItems:"center",gap:10,height:64,position:"sticky",top:0,zIndex:30}} onClick={e=>{if(!e.target.closest('#dropdown-filtro-i')&&!e.target.closest('#btn-dropdown-filtro-i'))setShowDropdownFiltro(false);}}>
+      <div style={{background:"#F8FAFC",padding:"24px 24px 16px",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
+        <div style={{minWidth:220,flex:"1 1 260px"}}>
+          <div style={{fontSize:26,fontWeight:800,color:"#0F172A",letterSpacing:"-0.02em"}}>{t("Gestión de casos","Case management")}</div>
+          <div style={{fontSize:13,color:"#64748B",marginTop:3}}>{t("Administra expedientes, fechas, pagos y seguimiento migratorio desde un solo lugar.","Manage files, dates, payments and immigration tracking from one place.")}</div>
+        </div>
+        <div style={{display:"flex",gap:10,alignItems:"stretch",flexWrap:"wrap",flexShrink:0}}>
+          <div style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:10,padding:"8px 16px",display:"flex",alignItems:"center",gap:9}}>
+            <span style={{fontSize:15}}>👥</span>
+            <div style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:800,color:"#0F172A",lineHeight:1.15}}>{clientes.length}</div><div style={{fontSize:10,color:"#64748B"}}>{t("clientes","clients")}</div></div>
+          </div>
+          <div onClick={()=>setShowAlertas(true)} style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:10,padding:"8px 16px",display:"flex",alignItems:"center",gap:9,cursor:"pointer"}}>
+            <span style={{fontSize:15}}>🔔</span>
+            <div style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:800,color:"#0F172A",lineHeight:1.15}}>{stats.alertas.length+stats.vencidos.length+stats.eadElegibles.length+solicitudesServicio.length}</div><div style={{fontSize:10,color:"#64748B"}}>{t("alertas pendientes","pending alerts")}</div></div>
+          </div>
+          <div style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:10,padding:"8px 16px",display:"flex",alignItems:"center",gap:9}}>
+            <span style={{fontSize:15,color:"#2563EB"}}>🕒</span>
+            <div><div style={{fontSize:10,color:"#64748B"}}>{t("Última actualización:","Last update:")}</div><div style={{fontSize:13,fontWeight:700,color:"#0F172A"}}>{t("Hoy","Today")}</div></div>
+          </div>
+          <button onClick={openAdd} style={{background:"#2563EB",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 6px rgba(37,99,235,0.30)"}}>+ {t("Nuevo Cliente","New Client")}</button>
+        </div>
+      </div>
+      <div style={{background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",padding:"4px 24px 14px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:30}} onClick={e=>{if(!e.target.closest('#dropdown-filtro-i')&&!e.target.closest('#btn-dropdown-filtro-i'))setShowDropdownFiltro(false);}}>
         <div style={{position:"relative",flexShrink:0}} id="dropdown-filtro-i">
-          <button id="btn-dropdown-filtro-i" onClick={()=>setShowDropdownFiltro(v=>!v)} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:8,fontSize:13,fontWeight:600,background:filtroSistema!=="todos"||filtroStatus!=="todos"?"#EFF6FF":"#F8FAFC",color:filtroSistema!=="todos"||filtroStatus!=="todos"?"#1E40AF":"#374151",border:filtroSistema!=="todos"||filtroStatus!=="todos"?"1px solid #BFDBFE":"1px solid #E2E8F0",cursor:"pointer",whiteSpace:"nowrap"}}>
+          <button id="btn-dropdown-filtro-i" onClick={()=>setShowDropdownFiltro(v=>!v)} style={{display:"flex",alignItems:"center",gap:6,padding:"10px 16px",borderRadius:10,fontSize:13,fontWeight:600,background:filtroSistema!=="todos"||filtroStatus!=="todos"?"#EFF6FF":"#fff",color:filtroSistema!=="todos"||filtroStatus!=="todos"?"#1E40AF":"#374151",border:filtroSistema!=="todos"||filtroStatus!=="todos"?"1px solid #BFDBFE":"1px solid #E2E8F0",cursor:"pointer",whiteSpace:"nowrap"}}>
             <span style={{fontSize:14}}>{filtroSistema==="todos"?"🗂":filtroSistema==="uscis"?"🏛":filtroSistema==="eoir"?"⚖️":filtroSistema==="foia"?"📂":"🚫"}</span>
             <span>{filtroSistema==="todos"?t("Todos los clientes","All clients"):filtroSistema==="uscis"?"USCIS":filtroSistema==="eoir"?"EOIR":filtroSistema==="foia"?"FOIA":t("Deportados","Deported")}</span>
             {filtroStatus!=="todos"&&<span style={{background:"#BFDBFE",color:"#1E40AF",fontSize:10,padding:"1px 7px",borderRadius:99,fontWeight:600}}>{filtroStatus==="vencido"?t("Vencidas","Overdue"):filtroStatus==="hoy"?t("Hoy","Today"):filtroStatus==="urgente"?t("Urgentes","Urgent"):filtroStatus==="proximo"?t("Próximas","Upcoming"):filtroStatus==="ok"?t("Al día","On track"):t("Sin fecha","No date")}</span>}
@@ -1747,27 +1768,25 @@ const loadTeam=async()=>{
           )}
         </div>
         <div style={{flex:1,display:"flex",gap:6,alignItems:"center",minWidth:0}}>
-          <input value={busqueda} onChange={e=>setBusqueda(e.target.value)} onKeyDown={e=>e.key==="Enter"&&setBusquedaActiva(busqueda)} placeholder={t("Nombre del cliente o A#...","Client name or A#...")} style={{flex:1,padding:"9px 14px",borderRadius:8,border:"1px solid #E2E8F0",fontSize:13,background:"#F8FAFC",outline:"none",minWidth:0}}/>
-          <button onClick={()=>setBusquedaActiva(busqueda)} style={{padding:"9px 20px",borderRadius:8,border:"none",background:"#1E40AF",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{t("Buscar","Search")}</button>
-          {busquedaActiva&&<button onClick={()=>{setBusqueda("");setBusquedaActiva("");}} style={{padding:"9px 14px",borderRadius:8,border:"1px solid #E2E8F0",background:"#fff",color:"#374151",fontSize:13,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>✕ {t("Limpiar","Clear")}</button>}
+          <div style={{flex:1,display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #E2E8F0",borderRadius:10,padding:"0 14px",minWidth:0}}>
+            <span style={{fontSize:14,color:"#94A3B8",flexShrink:0}}>🔍</span>
+            <input value={busqueda} onChange={e=>setBusqueda(e.target.value)} onKeyDown={e=>e.key==="Enter"&&setBusquedaActiva(busqueda)} placeholder={t("Buscar por nombre, número de recibo o A-Number...","Search by name, receipt number or A-Number...")} style={{flex:1,padding:"10px 0",border:"none",fontSize:13,background:"transparent",outline:"none",minWidth:0}}/>
+            <button onClick={()=>setBusquedaActiva(busqueda)} style={{background:"#2563EB",color:"#fff",border:"none",borderRadius:7,padding:"6px 16px",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0}}>{t("Buscar","Search")}</button>
+          </div>
+          {busquedaActiva&&<button onClick={()=>{setBusqueda("");setBusquedaActiva("");}} style={{padding:"10px 14px",borderRadius:10,border:"1px solid #E2E8F0",background:"#fff",color:"#374151",fontSize:13,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>✕ {t("Limpiar","Clear")}</button>}
         </div>
-        <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{padding:"9px 12px",borderRadius:8,border:"1px solid #E2E8F0",fontSize:13,background:"#fff",cursor:"pointer",color:"#374151"}}>
-          <option value="fecha">{t("Por fecha","By date")}</option>
+        <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{padding:"10px 14px",borderRadius:10,border:"1px solid #E2E8F0",fontSize:13,background:"#fff",cursor:"pointer",color:"#374151",fontWeight:500}}>
+          <option value="fecha">{t("Por próxima fecha","By next date")}</option>
           <option value="nombre">{t("Por nombre","By name")}</option>
         </select>
-        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:5,background:"#F1F5F9",borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,color:"#475569"}}>
-              👥 {clientes.length} {t("clientes","clients")}
-            </div>
-            {clientes.some(c=>!c.expediente)&&(
-              <button onClick={assignExpedientes} style={{background:"#7C3AED",color:"#fff",border:"none",borderRadius:8,padding:"7px 12px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
-                🔢 {t("Asignar EXP","Assign EXP")}
-              </button>
-            )}
-          </div>
-          <button onClick={openAdd} style={{background:"#2563EB",color:"#fff",border:"none",borderRadius:8,padding:"9px 20px",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
-          + {t("Nuevo Cliente","New Client")}
+        <button onClick={()=>setShowDropdownFiltro(v=>!v)} style={{display:"flex",alignItems:"center",gap:7,padding:"10px 16px",borderRadius:10,border:filtroSistema!=="todos"||filtroStatus!=="todos"?"1px solid #BFDBFE":"1px solid #E2E8F0",background:filtroSistema!=="todos"||filtroStatus!=="todos"?"#EFF6FF":"#fff",color:filtroSistema!=="todos"||filtroStatus!=="todos"?"#1E40AF":"#374151",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
+          <span style={{fontSize:13}}>⚙️</span> {t("Filtros","Filters")}
         </button>
+        {clientes.some(c=>!c.expediente)&&(
+          <button onClick={assignExpedientes} style={{background:"#7C3AED",color:"#fff",border:"none",borderRadius:10,padding:"10px 14px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
+            🔢 {t("Asignar EXP","Assign EXP")}
+          </button>
+        )}
       </div>
       <div style={{padding:"32px 32px 48px"}}>
 
