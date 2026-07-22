@@ -38,7 +38,7 @@
     const db = getFirestore(app);
     const storage = getStorage(app);
     window._firebase = { auth, db, storage, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, getDoc, ref, uploadBytesResumable, getDownloadURL };
-    console.log("%cImmigPath Monitor Personal — versión 2026-07-21-W","background:#2563EB;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
+    console.log("%cImmigPath Monitor Personal — versión 2026-07-21-X","background:#2563EB;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
 
     // Cargar logo y nombre de oficina desde ?o= antes del login
     (async()=>{
@@ -2265,50 +2265,50 @@ const loadTeam=async()=>{
                                 } catch(err) { console.error("toggleReloj error:", err); }
                               }
 
+                              const fmt2=f=>f?new Date(f+"T00:00:00").toLocaleDateString("es-US",{day:"numeric",month:"short",year:"numeric"}):"—";
+                              const getDC=f=>{if(!f)return null;const h=new Date();h.setHours(0,0,0,0);return Math.ceil((new Date(f+"T00:00:00")-h)/86400000);};
+                              const citaEAD=(()=>{if(!ca.fechaAsilo)return null;const d=new Date(ca.fechaAsilo+"T00:00:00");d.setDate(d.getDate()+180);return d.toISOString().split("T")[0];})();
+                              const esEoir=ca.sistema==="eoir";
+                              const citas=[
+                                {label:t("Biométricos","Biometrics"),icon:"🫆",fecha:ca.fechaHuellas||null},
+                                {label:t("Entrevista USCIS","USCIS Interview"),icon:"🎤",fecha:!esEoir?(ca.fechaCorte||null):null},
+                                {label:t("Corte (EOIR)","Court (EOIR)"),icon:"⚖️",fecha:esEoir?(ca.fechaCorte||null):null},
+                                {label:t("Elegible EAD","EAD Eligible"),icon:"🪪",fecha:citaEAD},
+                              ];
+
                               return(
-                                <div style={{gridColumn:"1/-1",background:relojDetenido?"#2D1515":"#1E1B4B",border:`1px solid ${relojDetenido?"#DC2626":"#4338CA"}`,borderRadius:10,padding:"12px 14px"}}>
-                                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                                    <div style={{fontSize:12,fontWeight:700,color:relojDetenido?"#FCA5A5":"#A5B4FC"}}>
-                                      {relojDetenido?"🔴 Reloj de Asilo — DETENIDO":"🟢 Reloj de Asilo — ACTIVO"}
+                                <div style={{gridColumn:"1/-1",background:"#0F172A",borderRadius:12,padding:"14px 16px"}}>
+                                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                                    <span style={{fontSize:15,fontWeight:600,color:relojDetenido?"#FCA5A5":"#C7D2FE"}}>{relojDetenido?"🔴 Reloj de Asilo — DETENIDO":"🟢 Reloj de Asilo — ACTIVO"}</span>
+                                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                      <span style={{fontSize:12,color:"#94A3B8"}}>Meta: 180 días</span>
+                                      <button onClick={toggleReloj} style={{fontSize:11,fontWeight:500,padding:"3px 10px",borderRadius:6,border:"none",background:relojDetenido?"#16A34A":"#DC2626",color:"#fff",cursor:"pointer"}}>{relojDetenido?"▶ Activar":"⏸ Detener"}</button>
                                     </div>
-                                    <button
-                                      onClick={toggleReloj}
-                                      style={{
-                                        padding:"4px 12px",
-                                        borderRadius:6,
-                                        border:"none",
-                                        fontSize:11,
-                                        fontWeight:700,
-                                        cursor:"pointer",
-                                        background:relojDetenido?"#16A34A":"#DC2626",
-                                        color:"#fff"
-                                      }}
-                                    >
-                                      {relojDetenido?"▶ Activar":"⏸ Detener"}
-                                    </button>
                                   </div>
-                                  <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:8}}>
-                                    <div style={{textAlign:"center"}}>
-                                      <div style={{fontSize:32,fontWeight:800,color:colorReloj,lineHeight:1}}>{diasReloj}</div>
-                                      <div style={{fontSize:11,color:relojDetenido?"#FCA5A5":"#A5B4FC"}}>dias transcurridos</div>
-                                    </div>
-                                    <div style={{flex:1}}>
-                                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                                        <span style={{fontSize:11,color:relojDetenido?"#FCA5A5":"#A5B4FC"}}>Presentado: {fmt(ca.fechaAsilo)}</span>
-                                        <span style={{fontSize:11,color:relojDetenido?"#FCA5A5":"#A5B4FC"}}>Meta: 180 dias</span>
-                                      </div>
-                                      <div style={{background:"#312E81",borderRadius:20,height:10,overflow:"hidden"}}>
-                                        <div style={{height:"100%",borderRadius:20,background:colorReloj,width:`${pctReloj}%`}}/>
-                                      </div>
-                                      <div style={{fontSize:11,color:colorReloj,fontWeight:700,marginTop:4}}>
-                                        {relojDetenido
-                                          ? `⏸ Reloj detenido desde ${fechaPausa||"hoy"} — ${diasReloj} días congelados`
-                                          : diasReloj>=180
-                                            ? (lang==="es"?`✅ Elegible para EAD — ${diasReloj} días`:`✅ Eligible for EAD — ${diasReloj} days`)
-                                            : `⏳ Faltan ${180-diasReloj} dias para aplicar al EAD`
-                                        }
-                                      </div>
-                                    </div>
+                                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+                                    <span style={{fontSize:24,fontWeight:500,color:colorReloj,whiteSpace:"nowrap"}}>{diasReloj} días</span>
+                                    <div style={{flex:1,background:"rgba(255,255,255,0.08)",borderRadius:20,height:5,overflow:"hidden"}}><div style={{height:"100%",borderRadius:20,background:colorReloj,width:`${pctReloj}%`}}/></div>
+                                  </div>
+                                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"#CBD5E1",marginBottom:12,fontWeight:500}}>
+                                    <span>Presentado: {fmt2(ca.fechaAsilo)}</span>
+                                    {diasReloj<180&&<span style={{color:"#FBBF24"}}>⏳ Faltan {180-diasReloj} días para aplicar al EAD</span>}
+                                    {diasReloj>=180&&<span style={{color:"#4ADE80"}}>✅ Elegible para EAD</span>}
+                                  </div>
+                                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,borderTop:"0.5px solid rgba(255,255,255,0.06)",paddingTop:10}}>
+                                    {citas.map((cita,ci)=>{
+                                      const dc=getDC(cita.fecha);
+                                      const pasado=dc!==null&&dc<0;
+                                      const badge=!cita.fecha?"N/A":pasado?"Completado ✓":dc===0?"HOY":dc!==null&&dc<=7?"Pendiente":`En ${dc} días`;
+                                      const badgeColor=!cita.fecha?"#475569":pasado?"#4ADE80":dc===0?"#DC2626":dc!==null&&dc<=7?"#D97706":"#93C5FD";
+                                      const badgeBg=!cita.fecha?"rgba(71,85,105,0.15)":pasado?"rgba(22,163,74,0.2)":dc===0?"rgba(220,38,38,0.15)":dc!==null&&dc<=7?"rgba(215,119,6,0.15)":"rgba(147,197,253,0.15)";
+                                      return(
+                                        <div key={ci} style={{textAlign:"center"}}>
+                                          <div style={{fontSize:12,color:"#CBD5E1",marginBottom:4,fontWeight:500}}>{cita.icon} {cita.label}</div>
+                                          <div style={{fontSize:15,fontWeight:700,color:cita.fecha?"#fff":"#64748B",marginBottom:5}}>{fmt2(cita.fecha)}</div>
+                                          <span style={{fontSize:12,fontWeight:600,background:badgeBg,color:badgeColor,padding:"3px 9px",borderRadius:10}}>{badge}</span>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               );
