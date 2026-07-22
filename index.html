@@ -5621,121 +5621,155 @@ function CasoEditorSimple({caso,onChange,onDelete,isAdmin=true,equipo=[],cliente
 
 // Mapeo: pregunta Jotform → campo i589Draft de ImmigPath
 function mapJotformToI589(answers) {
-  const g = (label) => {
-    const key = Object.keys(answers).find(k =>
-      (answers[k]?.text||"").toLowerCase().includes(label.toLowerCase())
-    );
-    if(!key) return "";
-    const v = answers[key];
-    if(typeof v === "string") return v;
-    if(v && typeof v === "object"){
-      if(v.answer) return typeof v.answer === "object" ? Object.values(v.answer).join(" ") : String(v.answer);
-      if(v.prettyFormat) return v.prettyFormat;
-      if(v.first || v.last) return [v.first,v.middle,v.last].filter(Boolean).join(" ");
-    }
-    return "";
-  };
-  const byLabel = {};
-  Object.values(answers).forEach(a => {
-    if(a && a.text) byLabel[a.text.toLowerCase().trim()] = a;
-  });
-  const bl = (label) => {
-    const key = Object.keys(byLabel).find(k => k.includes(label.toLowerCase().trim()));
-    const v = key ? byLabel[key] : null;
+  // Helper principal — extrae el valor de una respuesta de Jotform
+  const getVal = (v) => {
     if(!v) return "";
-    if(typeof v.answer === "string") return v.answer;
-    if(v.answer && typeof v.answer === "object") return Object.values(v.answer).join(" ");
-    if(v.prettyFormat) return v.prettyFormat;
-    return "";
+    const ans = v.answer;
+    if(!ans && ans !== 0) return v.prettyFormat || "";
+    if(typeof ans === "string") return ans;
+    if(typeof ans === "number") return String(ans);
+    if(typeof ans === "object"){
+      // Teléfono: {full: "(305) 260-9874"}
+      if(ans.full) return String(ans.full);
+      // Nombre: {first: "Juan", last: "Lopez"}
+      if(ans.first !== undefined || ans.last !== undefined)
+        return [ans.first,ans.middle,ans.last].filter(Boolean).join(" ");
+      // Dirección: {addr_line1, city, state, postal}
+      if(ans.addr_line1 !== undefined)
+        return [ans.addr_line1, ans.city, ans.state, ans.postal].filter(Boolean).join(", ");
+      // Fecha: {month, day, year}
+      if(ans.month !== undefined)
+        return `${ans.month}/${ans.day}/${ans.year}`;
+      // Fallback: unir valores
+      return Object.values(ans).filter(Boolean).join(" ");
+    }
+    return v.prettyFormat || "";
   };
 
-  // Nombre completo — Jotform puede tenerlo como nombre compuesto
+  // Buscar por texto de la pregunta (búsqueda parcial)
+  const bl = (label) => {
+    const lbl = label.toLowerCase().trim();
+    const key = Object.keys(answers).find(k => {
+      const txt = (answers[k]?.text||"").toLowerCase().trim();
+      return txt === lbl || txt.includes(lbl);
+    });
+    return key ? getVal(answers[key]) : "";
+  };
+
+  // Buscar por orden numérico de campo (para campos con misma etiqueta repetida)
+  const getByOrder = (label, index) => {
+    const lbl = label.toLowerCase().trim();
+    const matches = Object.keys(answers)
+      .filter(k => (answers[k]?.text||"").toLowerCase().trim().includes(lbl))
+      .sort((a,b) => parseInt(a)-parseInt(b));
+    const key = matches[index];
+    return key ? getVal(answers[key]) : "";
+  };
+
+  // ── Nombre completo ──
   const nombreRaw = bl("nombre completo");
   const partes = nombreRaw.trim().split(/\s+/);
   const nombre = partes.slice(0,-1).join(" ") || partes[0] || "";
   const apellido = partes.length > 1 ? partes[partes.length-1] : "";
 
-  const sexoRaw = (bl("que genero es usted")||bl("genero")||"").toLowerCase();
-  const sexo = sexoRaw.includes("masculino")||sexoRaw.includes("hombre")||sexoRaw==="m" ? "M"
-             : sexoRaw.includes("femenin")||sexoRaw.includes("mujer")||sexoRaw==="f" ? "F" : "";
+  // ── Sexo ──
+  const sexoRaw = (bl("que genero es usted")||"").toLowerCase();
+  const sexo = sexoRaw.includes("masculino")||sexoRaw.includes("hombre") ? "M"
+             : sexoRaw.includes("femenin")||sexoRaw.includes("mujer") ? "F" : "";
 
+  // ── Estado civil ──
   const estadoCivilRaw = (bl("estatus matrimonial")||"").toLowerCase();
   const tieneConjuge = estadoCivilRaw.includes("casad") ? "si" : "no";
   const estadoCivilEn = estadoCivilRaw.includes("casad") ? "Married"
     : estadoCivilRaw.includes("solt") ? "Single"
     : estadoCivilRaw.includes("divorciad") ? "Divorced"
-    : estadoCivilRaw.includes("viud") ? "Widowed" : estadoCivilRaw;
+    : estadoCivilRaw.includes("viud") ? "Widowed" : "";
 
-  // Direccion
-  const dirRaw = bl("direccion actual donde vive") || bl("direccion actual");
+  // ── País y ciudad de nacimiento ──
+  const paisCiudadRaw = bl("pais y ciudad donde nacio");
+  const pcParts = paisCiudadRaw.split(/[,\s]+/).map(s=>s.trim()).filter(Boolean);
+  const ciudadNac = pcParts[0] || "";
+  const paisNac = pcParts[1] || pcParts[0] || "";
 
-  // Ciudad y país de nacimiento
-  const paisCiudadNac = bl("pais y ciudad donde nacio") || "";
-  const paisCiudadParts = paisCiudadNac.split(",").map(s=>s.trim());
-  const ciudadNac = paisCiudadParts[0] || "";
-  const paisNac   = paisCiudadParts[1] || paisCiudadParts[0] || "";
+  // ── Dirección actual en EE.UU. ──
+  const dirRaw = bl("direccion actual donde vive");
 
-  // Pasaporte
-  const pasaporte = bl("numero de pasaporte") || bl("numero de pasaporte ");
+  // ── Pasaporte ──
+  const pasaporte = bl("numero de pasaporte");
 
-  // Hijos
-  const tieneHijosRaw = (bl("tiene hijo") || "").toLowerCase();
-  const tieneHijos = tieneHijosRaw.includes("si") || tieneHijosRaw.includes("sí") ? "si" : "no";
+  // ── Hijos ──
+  const tieneHijosRaw = (bl("tiene hijo")||"").toLowerCase();
+  const tieneHijos = tieneHijosRaw.includes("si")||tieneHijosRaw.includes("sí") ? "si" : "no";
 
+  // Hijos — los campos se repiten, usamos getByOrder
   const hijos = [];
-  for(let i=1;i<=3;i++){
-    const hNombre = bl(`informacion hijo ${i}`);
-    const hDob    = bl(`fecha de nacimiento`); // simplificado; Jotform repite etiquetas
-    const hDonde  = bl(`donde nacio`);
-    if(hNombre){ hijos.push({ nombre:hNombre, dob:hDob, ciudad:hDonde, nac:"", sexo:"", enusa:"", incluir: bl(`va hacer incluido`) }); }
+  for(let i=0;i<3;i++){
+    const hNombre = getByOrder("informacion hijo", i);
+    const hDob = getByOrder("fecha de nacimiento", i+1); // índice +1 porque el 0 es el solicitante
+    const hDonde = getByOrder("donde nacio", i);
+    const hVive = getByOrder("donde vive actualmente", i);
+    const hAlien = getByOrder("numero alien (si aplica)", i);
+    const hIncluir = getByOrder("va hacer incluido", i);
+    if(hNombre) hijos.push({
+      nombre: hNombre.split(" ")[0]||"", apellido: hNombre.split(" ").slice(1).join(" ")||"",
+      dob: hDob, ciudad: hDonde, nac: hDonde,
+      enusa: hVive.toLowerCase().includes("usa")||hVive.toLowerCase().includes("united")?"si":"no",
+      alien: hAlien, incluir: hIncluir.toLowerCase().includes("si")?"si":"no", sexo:""
+    });
   }
 
-  // Preguntas narrativas
-  const q1 = bl("explique las razones por que usted salio") || bl("explique las razones") || "";
+  // ── Narrativa Q1 ──
+  const q1 = bl("explique las razones por que usted salio") || bl("explique las razones");
 
-  // Padres
-  const madreNombre   = bl("nombre completo de su madre");
-  const madreNac      = bl("donde nacio su madre");
-  const madreUbicacion= bl("donde vive actualmente su madre");
-  const padreNombre   = bl("nombre completo de su padre");
-  const padreNac      = bl("donde nacio su padre");
-  const padreUbicacion= bl("donde vive actualmente su padre");
+  // ── Padres ──
+  const madreNombre    = bl("nombre completo de su madre");
+  const madreNac       = bl("donde nacio su madre");
+  const madreUbicacion = bl("donde vive actualmente su madre");
+  const padreNombre    = bl("nombre completo de su padre");
+  const padreNac       = bl("donde nacio su padre");
+  const padreUbicacion = bl("donde vive actualmente su padre");
 
-  // Hermanos
-  const h1 = bl("hermano (a) 1 - nombre completo de su hermano (a)") || bl("hermano (a) 1");
-  const h2 = bl("hermano (a) 2 - nombre completo de su hermano (a)") || bl("hermano (a) 2");
-  const h3 = bl("hermano (a) 3 - nombre completo de su hermano (a)") || bl("hermano (a) 3");
+  // ── Hermanos ──
+  const h1 = bl("hermano (a) 1");
+  const h2 = bl("hermano (a) 2");
+  const h3 = bl("hermano (a) 3");
   const hermanos = [h1,h2,h3].filter(Boolean).join("\n");
 
-  // Empleo
-  const emp1 = [bl("empleo 1 - nombre de la empresa"), bl("cargo")].filter(Boolean).join(" — ");
-  const emp2 = [bl("empleo 2 - nombre de la empresa")].filter(Boolean).join(" — ");
-  const emp3 = [bl("empleo 3 - nombre de la empresa")].filter(Boolean).join(" — ");
-  const empleos = [emp1,emp2,emp3].filter(Boolean).join("\n");
+  // ── Empleos ──
+  const emp1n = bl("empleo 1 - nombre de la empresa");
+  const emp1c = getByOrder("cargo", 0);
+  const emp2n = bl("empleo 2 - nombre de la empresa");
+  const emp3n = bl("empleo 3 - nombre de la empresa");
+  const empleos = [
+    emp1n&&emp1c?`${emp1n} — ${emp1c}`:emp1n,
+    emp2n, emp3n
+  ].filter(Boolean).join("\n");
 
-  // Educación
+  // ── Educación ──
   const edu1 = bl("nombre de la escuela primaria");
   const edu2 = bl("nombre de la escuela secundaria");
-  const edu3 = bl("estudios adiciones - nombre de la institucion") || bl("estudios adicionales");
+  const edu3 = bl("estudios adiciones - nombre de la institucion");
   const educacion = [edu1,edu2,edu3].filter(Boolean).join("\n");
 
-  // Dirección de origen
-  const dirOrigen = bl("direccion de su pais") || bl("informacion direccion 1");
-  const dirDesde  = bl("fecha que comenzo a vivir");
-  const dirHasta  = bl("fecha que dejo de vivir");
-
-  // Residencias
-  const dir2 = bl("informacion direccion  2") || bl("informacion direccion 2");
-  const dir3 = bl("informacion direccion  3") || bl("informacion direccion 3");
+  // ── Direcciones ──
+  const dirOrigen = bl("direccion de su pais");
+  const dirDesde  = getByOrder("fecha que comenzo a vivir", 0);
+  const dirHasta  = getByOrder("fecha que dejo de vivir", 0);
+  const dir2 = bl("informacion direccion  2") || getByOrder("direccion", 1);
+  const dir3 = bl("informacion direccion  3") || getByOrder("direccion", 2);
   const residencias = [dirOrigen, dir2, dir3].filter(Boolean).join("\n");
 
-  // Cónyuge
+  // ── Entrada a EE.UU. ──
+  const e1fecha  = bl("fecha que entro a estados unidos");
+  const e1lugar  = bl("por que frontera entro a estados unidos");
+
+  // ── Cónyuge ──
   const conjNombre = bl("nombre completo de su esposo(a)") || bl("nombre completo de su esposo");
-  const conjDob    = bl("fecha de nacimiento de su esposo(a)") || bl("fecha de nacimiento de su esposo");
-  const conjPais   = bl("de que pais es su esposo(a)") || bl("de que pais es su esposo");
-  const conjUbic   = bl("donde se encuentra actualmente su esposo (a)") || bl("donde se encuentra actualmente su esposo");
-  const conjAlien  = bl("escriba el numero alien si su esposo (a) cuenta con uno");
-  const conjNac    = bl("donde nacio su esposo(a)") || bl("donde nacio su esposo");
+  const conjDob    = bl("fecha de nacimiento de su esposo(a)");
+  const conjPais   = bl("de que pais es su esposo(a)");
+  const conjUbic   = bl("donde se encuentra actualmente su esposo");
+  const conjAlien  = bl("escriba el numero alien si su esposo");
+  const conjNac    = bl("donde nacio su esposo(a)");
 
   return {
     nombre, apellido,
@@ -5814,7 +5848,7 @@ window.descargarI589PDF = async function(cliente, oficina, usuario) {
 
   try {
     const P = 'form1[0].#subform[0].';
-    const baseUrl = 'i589-base.pdf';
+    const baseUrl = 'https://privas31.github.io/ImmigPath/i589-base.pdf';
     const resp = await fetch(baseUrl);
     if(!resp.ok) throw new Error('No se encontró el formulario base i589-base.pdf en el servidor');
     const bytes = await resp.arrayBuffer();
