@@ -5787,7 +5787,9 @@ function mapJotformToI589(answers) {
 // Descarga del PDF original de Jotform vía iframe invisible
 window.descargarJotformOriginalPDF = function(submissionId) {
   if(!submissionId){ alert("ID de submission no disponible"); return; }
-  const url = `https://www.jotform.com/submission/${submissionId}/pdf`;
+  // Usar API key para acceder al PDF desde la cuenta de Jotform
+  const apiKey = "75b3c9967ba796a2f4a988519a37573a";
+  const url = `https://www.jotform.com/submissions/pdf/${submissionId}?apiKey=${apiKey}`;
   window.open(url, "_blank");
 };
 
@@ -5812,7 +5814,7 @@ window.descargarI589PDF = async function(cliente, oficina, usuario) {
 
   try {
     const P = 'form1[0].#subform[0].';
-    const baseUrl = 'i589-base.pdf';
+    const baseUrl = 'https://privas31.github.io/ImmigPath/i589-base.pdf';
     const resp = await fetch(baseUrl);
     if(!resp.ok) throw new Error('No se encontró el formulario base i589-base.pdf en el servidor');
     const bytes = await resp.arrayBuffer();
