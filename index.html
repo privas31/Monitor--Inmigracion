@@ -39,6 +39,19 @@
     const db = getFirestore(app);
     const storage = getStorage(app);
     window._firebase = { auth, db, storage, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, getDoc, ref, uploadBytesResumable, getDownloadURL };
+
+    // Segunda app: immigration-platform-11380 (jotform_submissions)
+    const firebaseConfigPlatform = {
+      apiKey: "AIzaSyAnZXNV8tUCgUheOrI2p0due1Dj4S_tYCg",
+      authDomain: "immigration-platform-11380.firebaseapp.com",
+      projectId: "immigration-platform-11380",
+      storageBucket: "immigration-platform-11380.firebasestorage.app",
+      messagingSenderId: "682062748742",
+      appId: "1:682062748742:web:5b2466ddf7d8ae05a67e47",
+    };
+    const appPlatform = initializeApp(firebaseConfigPlatform, "platform");
+    const dbPlatform = getFirestore(appPlatform);
+    window._dbPlatform = dbPlatform;
     console.log("%cImmigPath Monitor Personal — versión 2026-07-21-X","background:#2563EB;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
 
     // Cargar logo y nombre de oficina desde ?o= antes del login
@@ -559,9 +572,10 @@ function App(){
   const loadJotformSubs = async () => {
     setJotformLoading(true); setJotformError("");
     try {
-      // Intentar cargar desde Firestore primero (submissions ya guardadas)
-      const{db,collection,getDocs,query,orderBy:ob}=window._firebase;
-      const snap = await getDocs(query(collection(db,"jotform_submissions"),ob("createdAt","desc")));
+      // Leer desde immigration-platform-11380 (donde el webhook guarda los datos)
+      const{collection,getDocs,query,orderBy:ob}=window._firebase;
+      const dbJ = window._dbPlatform;
+      const snap = await getDocs(query(collection(dbJ,"jotform_submissions"),ob("createdAt","desc")));
       const saved = snap.docs.map(d=>({id:d.id,...d.data()}));
 
       // También llamar a la API de Jotform si hay API key
@@ -607,11 +621,12 @@ function App(){
 
   const marcarJotformRevisado = async (sub, comentario="") => {
     try {
-      const{db,collection,addDoc,doc:fbDoc,updateDoc,setDoc}=window._firebase;
+      const{collection,addDoc,doc:fbDoc,updateDoc}=window._firebase;
+      const dbJ = window._dbPlatform;
       if(sub.id){
-        await updateDoc(fbDoc(db,"jotform_submissions",sub.id),{_status:"revisado",_comentario:comentario,_revisadoAt:new Date().toISOString()});
+        await updateDoc(fbDoc(dbJ,"jotform_submissions",sub.id),{_status:"revisado",_comentario:comentario,_revisadoAt:new Date().toISOString()});
       } else {
-        await addDoc(collection(db,"jotform_submissions"),{...sub,_status:"revisado",_comentario:comentario,_revisadoAt:new Date().toISOString(),createdAt:sub._createdAt||new Date().toISOString()});
+        await addDoc(collection(dbJ,"jotform_submissions"),{...sub,_status:"revisado",_comentario:comentario,_revisadoAt:new Date().toISOString(),createdAt:sub._createdAt||new Date().toISOString()});
       }
       await loadJotformSubs();
       showToastFn("✅ Submission marcada como revisada");
