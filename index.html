@@ -576,7 +576,22 @@ function App(){
       const{collection,getDocs,query,orderBy:ob}=window._firebase;
       const dbJ = window._dbPlatform;
       const snap = await getDocs(query(collection(dbJ,"jotform_submissions"),ob("createdAt","desc")));
-      const saved = snap.docs.map(d=>({id:d.id,...d.data()}));
+      const saved = snap.docs.map(d=>{
+        const data = d.data();
+        // _i589mapped puede llegar como string JSON — parsearlo si es necesario
+        if(data._i589mapped && typeof data._i589mapped === 'string'){
+          try{ data._i589mapped = JSON.parse(data._i589mapped); }catch(e){}
+        }
+        // nombre puede estar vacío — intentar reconstruirlo desde _i589mapped
+        if((!data.nombre||data.nombre.trim()==='') && data._i589mapped){
+          const m = data._i589mapped;
+          data.nombre = ((m.nombre||'') + ' ' + (m.apellido||'')).trim();
+        }
+        if(!data.telefono && data._i589mapped){
+          data.telefono = data._i589mapped.telefono||'';
+        }
+        return {id:d.id,...data};
+      });
 
       // También llamar a la API de Jotform si hay API key
       let apiSubs = [];
