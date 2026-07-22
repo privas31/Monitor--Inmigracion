@@ -17,6 +17,7 @@
     })();
   </script>
   <script src="https://unpkg.com/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -392,6 +393,18 @@ function App(){
   const[i589Comentario,setI589Comentario]=useState("");
   const[i589Saving,setI589Saving]=useState(false);
 
+  // ── MÓDULO JOTFORM ASILO ──────────────────────────────────────────────────
+  const JOTFORM_FORM_ID = "250147855559063";
+  const JOTFORM_API_KEY = ""; // ← Coloca aquí tu API Key de Jotform
+  const[showJotform,setShowJotform]=useState(false);
+  const[jotformSubs,setJotformSubs]=useState([]);
+  const[jotformLoading,setJotformLoading]=useState(false);
+  const[jotformError,setJotformError]=useState("");
+  const[jotformSel,setJotformSel]=useState(null);
+  const[jotformEditData,setJotformEditData]=useState(null);
+  const[jotformTab,setJotformTab]=useState("nuevas"); // "nuevas" | "revisadas"
+  const[jotformPendientes,setJotformPendientes]=useState(0);
+
   const[showPagosConfig,setShowPagosConfig]=useState(false);
   const[showCobrar,setShowCobrar]=useState(false);
   const[cobrarCliente,setCobrarCliente]=useState(null);
@@ -540,6 +553,92 @@ function App(){
       const snap=await getDocs(q);
       setSolicitudesServicio(snap.docs.map(d=>({id:d.id,...d.data()})));
     }catch(e){console.error("loadSolicitudesServicio error:",e);}
+  };
+
+  // ── Cargar submissions de Jotform ─────────────────────────────────────────
+  const loadJotformSubs = async () => {
+    setJotformLoading(true); setJotformError("");
+    try {
+      // Intentar cargar desde Firestore primero (submissions ya guardadas)
+      const{db,collection,getDocs,query,orderBy:ob}=window._firebase;
+      const snap = await getDocs(query(collection(db,"jotform_submissions"),ob("createdAt","desc")));
+      const saved = snap.docs.map(d=>({id:d.id,...d.data()}));
+
+      // También llamar a la API de Jotform si hay API key
+      let apiSubs = [];
+      if(JOTFORM_API_KEY){
+        const r = await fetch(
+          `https://api.jotform.com/form/${JOTFORM_FORM_ID}/submissions?apiKey=${JOTFORM_API_KEY}&limit=100&orderby=created_at,DESC`,
+          { headers:{"Content-Type":"application/json"} }
+        );
+        const data = await r.json();
+        if(data.content && Array.isArray(data.content)){
+          apiSubs = data.content.map(s => {
+            const mapped = mapJotformToI589(s.answers||{});
+            return {
+              _subId: s.id,
+              _createdAt: s.created_at,
+              _answers: s.answers,
+              _i589mapped: mapped,
+              _status: "nueva",
+              nombre: mapped.nombre + " " + mapped.apellido,
+              telefono: mapped.telefono,
+              fecha: s.created_at,
+            };
+          });
+        }
+      }
+
+      // Combinar: si ya está en Firestore, usar Firestore; si no, usar API
+      const savedIds = new Set(saved.map(s=>s._subId));
+      const combined = [
+        ...saved,
+        ...apiSubs.filter(s=>!savedIds.has(s._subId))
+      ];
+      setJotformSubs(combined);
+      const nuevas = combined.filter(s=>(!s._status||s._status==="nueva")).length;
+      setJotformPendientes(nuevas);
+    } catch(e) {
+      console.error("loadJotformSubs error:", e);
+      setJotformError("Error cargando submissions: " + e.message);
+    }
+    setJotformLoading(false);
+  };
+
+  const marcarJotformRevisado = async (sub, comentario="") => {
+    try {
+      const{db,collection,addDoc,doc:fbDoc,updateDoc,setDoc}=window._firebase;
+      if(sub.id){
+        await updateDoc(fbDoc(db,"jotform_submissions",sub.id),{_status:"revisado",_comentario:comentario,_revisadoAt:new Date().toISOString()});
+      } else {
+        await addDoc(collection(db,"jotform_submissions"),{...sub,_status:"revisado",_comentario:comentario,_revisadoAt:new Date().toISOString(),createdAt:sub._createdAt||new Date().toISOString()});
+      }
+      await loadJotformSubs();
+      showToastFn("✅ Submission marcada como revisada");
+    } catch(e){ showToastFn("Error: "+e.message,"error"); }
+  };
+
+  const guardarEnClientes = async (sub) => {
+    const d = sub._i589mapped||{};
+    if(!d.nombre&&!d.apellido){ showToastFn("No hay nombre para crear el cliente","error"); return; }
+    try {
+      const{db,collection,addDoc}=window._firebase;
+      const officeId = officeData?.id||userData?.officeId||"personal";
+      await addDoc(collection(db,"clientes"),{
+        officeId,
+        nombre: (d.nombre||"")+" "+(d.apellido||""),
+        alienNum: d.alien||"",
+        telefono: d.telefono||"",
+        email: d.email||"",
+        casos:[],
+        i589Draft: d,
+        createdAt: new Date().toISOString(),
+        fuente: "jotform",
+        jotformSubId: sub._subId||"",
+      });
+      showToastFn("✅ Cliente creado en el monitor desde Jotform");
+      await loadCases();
+    } catch(e){ showToastFn("Error guardando cliente: "+e.message,"error"); }
   };
 
   const cargarPagosCliente=async(clienteId)=>{
@@ -1671,6 +1770,7 @@ const loadTeam=async()=>{
     {id:"equipo",    label:t("Equipo","Team"),                     icon:"🤝", show:isAdmin, onClick:()=>{setShowTeam(true);loadOfficeUsers();}},
     {id:"usuarios",  label:t("Usuarios","Users"),                  icon:"🔐", show:isAdmin, onClick:()=>setShowAddUser(true)},
     {id:"reportes",  label:t("Reportes","Reports"),                icon:"📈", show:isAdmin, onClick:()=>setShowPDF(true)},
+    {id:"jotform",  label:"Jotform — Asilo", icon:"📥", badge:jotformPendientes||null, onClick:()=>{setShowJotform(true);loadJotformSubs();}},
     {id:"sec-herramientas", section:t("Herramientas","Tools")},
     {id:"uscis",     label:t("Verificador USCIS","USCIS Checker")+(uscisHabilitado?"":" 🔒"), icon:"🔎", onClick:()=>{setShowUSCIS(true);if(uscisHabilitado)loadCasosUscis();}},
     {id:"envios",    label:t("Control de envíos","Shipments")+(enviosHabilitado?"":" 🔒"), icon:"📦", onClick:()=>{setShowEnvios(true);if(enviosHabilitado)loadEnvios();}},
@@ -3742,6 +3842,214 @@ const loadTeam=async()=>{
       </div>
     )}
 
+    {/* ═══ MODAL JOTFORM — ASILO POLÍTICO ═══ */}
+    {showJotform&&(
+      <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.75)",zIndex:200,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 12px",overflowY:"auto"}}>
+        <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:1100,minHeight:400,boxShadow:"0 24px 80px rgba(0,0,0,0.35)",overflow:"hidden"}}>
+
+          {/* Header */}
+          <div style={{background:"linear-gradient(135deg,#0F172A 0%,#1E3A6E 100%)",padding:"20px 24px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <div style={{fontSize:20,fontWeight:800,color:"#fff",display:"flex",alignItems:"center",gap:10}}>
+                📥 Jotform — Asilo Político
+                {jotformPendientes>0&&<span style={{background:"#EF4444",color:"#fff",borderRadius:20,padding:"2px 9px",fontSize:12,fontWeight:700}}>{jotformPendientes} nueva(s)</span>}
+              </div>
+              <div style={{fontSize:12,color:"#94A3B8",marginTop:4}}>Form ID: {JOTFORM_FORM_ID} · {jotformSubs.length} submissions cargadas</div>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <button onClick={loadJotformSubs} disabled={jotformLoading} style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,color:"#fff",padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>
+                {jotformLoading?"⏳ Cargando...":"🔄 Actualizar"}
+              </button>
+              <button onClick={()=>{setShowJotform(false);setJotformSel(null);setJotformEditData(null);}} style={{background:"rgba(255,255,255,0.1)",border:"none",borderRadius:8,color:"#fff",padding:"8px 13px",cursor:"pointer",fontSize:16}}>✕</button>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div style={{borderBottom:"1px solid #E2E8F0",padding:"0 24px",background:"#F8FAFC",display:"flex",gap:4}}>
+            {[
+              {id:"nuevas",label:"🔔 Nuevas",count:jotformSubs.filter(s=>!s._status||s._status==="nueva").length},
+              {id:"revisadas",label:"✅ Revisadas",count:jotformSubs.filter(s=>s._status==="revisado").length},
+              {id:"todas",label:"📋 Todas",count:jotformSubs.length},
+            ].map(tab=>(
+              <button key={tab.id} onClick={()=>setJotformTab(tab.id)} style={{padding:"11px 16px",border:"none",background:"transparent",borderBottom:jotformTab===tab.id?"3px solid #2563EB":"3px solid transparent",color:jotformTab===tab.id?"#2563EB":"#64748B",fontSize:13,fontWeight:jotformTab===tab.id?700:400,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                {tab.label}
+                {tab.count>0&&<span style={{background:jotformTab===tab.id?"#2563EB":"#E2E8F0",color:jotformTab===tab.id?"#fff":"#64748B",borderRadius:20,padding:"1px 7px",fontSize:11,fontWeight:700}}>{tab.count}</span>}
+              </button>
+            ))}
+          </div>
+
+          {/* Sin API Key warning */}
+          {!JOTFORM_API_KEY&&(
+            <div style={{margin:"16px 24px 0",background:"#FEF9C3",border:"1px solid #FDE047",borderRadius:10,padding:"12px 16px",fontSize:13,color:"#854D0E",display:"flex",alignItems:"center",gap:10}}>
+              ⚠️ <span>Para cargar submissions automáticamente, agrega tu <strong>API Key de Jotform</strong> en el código (<code>JOTFORM_API_KEY</code>). Por ahora se muestran solo las guardadas en Firestore.</span>
+            </div>
+          )}
+
+          {jotformError&&<div style={{margin:"12px 24px 0",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#DC2626"}}>⚠️ {jotformError}</div>}
+
+          <div style={{display:"grid",gridTemplateColumns:jotformSel?"1fr 420px":"1fr",gap:0,minHeight:400}}>
+
+            {/* Lista de submissions */}
+            <div style={{padding:"16px 24px",overflowY:"auto",maxHeight:"70vh"}}>
+              {jotformLoading?(
+                <div style={{textAlign:"center",padding:40,color:"#94A3B8"}}>⏳ Cargando submissions...</div>
+              ):(()=>{
+                const filtradas = jotformSubs.filter(s=>{
+                  if(jotformTab==="nuevas") return !s._status||s._status==="nueva";
+                  if(jotformTab==="revisadas") return s._status==="revisado";
+                  return true;
+                });
+                if(filtradas.length===0) return(
+                  <div style={{textAlign:"center",padding:48}}>
+                    <div style={{fontSize:40,marginBottom:12}}>📭</div>
+                    <div style={{fontSize:14,fontWeight:700,color:"#0F172A"}}>No hay submissions en esta categoría</div>
+                    <div style={{fontSize:12,color:"#94A3B8",marginTop:6}}>
+                      {!JOTFORM_API_KEY?"Agrega tu API Key de Jotform para cargar submissions automáticamente.":"Haz clic en Actualizar para refrescar."}
+                    </div>
+                  </div>
+                );
+                return filtradas.map((sub,i)=>{
+                  const d = sub._i589mapped||{};
+                  const isSelected = jotformSel?._subId===sub._subId;
+                  const esNueva = !sub._status||sub._status==="nueva";
+                  return(
+                    <div key={sub.id||sub._subId||i} onClick={()=>{setJotformSel(sub);setJotformEditData({...d});}}
+                      style={{border:`2px solid ${isSelected?"#2563EB":"#E2E8F0"}`,borderRadius:12,padding:"14px 16px",marginBottom:10,cursor:"pointer",background:isSelected?"#EFF6FF":"#fff",transition:"all 0.15s",boxShadow:isSelected?"0 2px 8px rgba(37,99,235,0.15)":"none"}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                        <div style={{display:"flex",alignItems:"center",gap:10}}>
+                          <div style={{width:36,height:36,borderRadius:"50%",background:esNueva?"#DBEAFE":"#F0FDF4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>
+                            {esNueva?"🆕":"✅"}
+                          </div>
+                          <div>
+                            <div style={{fontSize:14,fontWeight:700,color:"#0F172A"}}>{(d.nombre||"")+" "+(d.apellido||"")||sub.nombre||"Sin nombre"}</div>
+                            <div style={{fontSize:11,color:"#64748B",marginTop:2}}>
+                              📞 {d.telefono||"—"} · A# {d.alien||"N/A"}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{textAlign:"right",flexShrink:0}}>
+                          <div style={{fontSize:11,color:"#94A3B8"}}>{sub._createdAt ? new Date(sub._createdAt).toLocaleDateString("es") : sub.fecha ? new Date(sub.fecha).toLocaleDateString("es") : "—"}</div>
+                          <span style={{fontSize:10,fontWeight:700,color:esNueva?"#2563EB":"#16A34A",background:esNueva?"#EFF6FF":"#F0FDF4",borderRadius:20,padding:"2px 8px",marginTop:3,display:"inline-block"}}>
+                            {esNueva?"NUEVA":"REVISADA"}
+                          </span>
+                        </div>
+                      </div>
+                      {d.q1&&<div style={{marginTop:8,fontSize:11,color:"#64748B",background:"#F8FAFC",borderRadius:6,padding:"6px 8px",lineHeight:1.5,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>📝 {d.q1}</div>}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Panel de detalle */}
+            {jotformSel&&jotformEditData&&(
+              <div style={{borderLeft:"1px solid #E2E8F0",background:"#F8FAFC",overflowY:"auto",maxHeight:"70vh"}}>
+
+                {/* Mini header del panel */}
+                <div style={{padding:"14px 18px",background:"#fff",borderBottom:"1px solid #E2E8F0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div style={{fontSize:13,fontWeight:700,color:"#0F172A"}}>📋 Detalle del cliente</div>
+                  <button onClick={()=>{setJotformSel(null);setJotformEditData(null);}} style={{background:"#F1F5F9",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:12,color:"#64748B"}}>✕</button>
+                </div>
+
+                <div style={{padding:"14px 18px"}}>
+                  {/* Campos editables */}
+                  <div style={{fontSize:11,fontWeight:700,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>Información personal</div>
+
+                  {[
+                    {key:"nombre",label:"Nombre"},
+                    {key:"apellido",label:"Apellido"},
+                    {key:"alien",label:"Número Alien (A#)"},
+                    {key:"telefono",label:"Teléfono"},
+                    {key:"dob",label:"Fecha de nacimiento"},
+                    {key:"direccion",label:"Dirección en EE.UU."},
+                    {key:"ciudad-nac",label:"Ciudad de nacimiento"},
+                    {key:"pais-nac",label:"País de nacimiento"},
+                    {key:"nacionalidad",label:"Nacionalidad"},
+                    {key:"religion",label:"Religión"},
+                    {key:"pasaporte",label:"N° Pasaporte"},
+                    {key:"fecha-salida",label:"Última vez en su país"},
+                    {key:"fecha-entrada",label:"Fecha entrada EE.UU."},
+                    {key:"e1-lugar",label:"Frontera de entrada"},
+                  ].map(f=>(
+                    <div key={f.key} style={{marginBottom:8}}>
+                      <label style={{display:"block",fontSize:10,fontWeight:600,color:"#64748B",marginBottom:3,textTransform:"uppercase"}}>{f.label}</label>
+                      <input value={jotformEditData[f.key]||""} onChange={e=>setJotformEditData(prev=>({...prev,[f.key]:e.target.value}))}
+                        style={{width:"100%",padding:"7px 9px",borderRadius:7,border:"1px solid #D1D5DB",fontSize:12,outline:"none",background:"#fff"}}/>
+                    </div>
+                  ))}
+
+                  <div style={{marginBottom:8}}>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#64748B",marginBottom:3,textTransform:"uppercase"}}>Sexo</label>
+                    <select value={jotformEditData.sexo||""} onChange={e=>setJotformEditData(prev=>({...prev,sexo:e.target.value}))}
+                      style={{width:"100%",padding:"7px 9px",borderRadius:7,border:"1px solid #D1D5DB",fontSize:12,outline:"none",background:"#fff"}}>
+                      <option value="">-- Seleccionar --</option>
+                      <option value="M">Masculino</option>
+                      <option value="F">Femenino</option>
+                    </select>
+                  </div>
+
+                  <div style={{marginTop:12,marginBottom:8}}>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#64748B",marginBottom:3,textTransform:"uppercase"}}>Narrativa — Razones de asilo (Q1)</label>
+                    <textarea value={jotformEditData.q1||""} onChange={e=>setJotformEditData(prev=>({...prev,q1:e.target.value}))} rows={5}
+                      style={{width:"100%",padding:"7px 9px",borderRadius:7,border:"1px solid #D1D5DB",fontSize:12,outline:"none",resize:"vertical",fontFamily:"inherit",background:"#fff"}}/>
+                  </div>
+
+                  {/* Botones de descarga */}
+                  <div style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:12,padding:"14px",marginTop:4,marginBottom:12}}>
+                    <div style={{fontSize:12,fontWeight:700,color:"#0F172A",marginBottom:10}}>📥 Descargar formulario</div>
+
+                    <button onClick={()=>window.descargarJotformOriginalPDF(jotformSel._subId)}
+                      style={{width:"100%",padding:"10px",borderRadius:9,border:"1px solid #BFDBFE",background:"#EFF6FF",color:"#1D4ED8",cursor:"pointer",fontSize:12,fontWeight:700,marginBottom:8,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+                      📄 PDF Jotform (original)
+                    </button>
+
+                    <button onClick={()=>{
+                        const subConEdit = {...jotformSel, _i589mapped:{...jotformEditData}};
+                        window.descargarI589DesdeSub(subConEdit);
+                      }}
+                      style={{width:"100%",padding:"10px",borderRadius:9,border:"1px solid #BBF7D0",background:"#F0FDF4",color:"#16A34A",cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+                      🏛️ PDF I-589 USCIS (con datos)
+                    </button>
+                  </div>
+
+                  {/* Acciones */}
+                  <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                    <button onClick={()=>guardarEnClientes({...jotformSel,_i589mapped:jotformEditData})}
+                      style={{width:"100%",padding:"10px",borderRadius:9,border:"none",background:"#2563EB",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+                      👤 Crear cliente en el monitor
+                    </button>
+                    <button onClick={()=>marcarJotformRevisado(jotformSel)}
+                      style={{width:"100%",padding:"9px",borderRadius:9,border:"1px solid #D1D5DB",background:"#F8FAFC",color:"#475569",cursor:"pointer",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+                      ✅ Marcar como revisado
+                    </button>
+                  </div>
+
+                  {jotformSel._comentario&&(
+                    <div style={{marginTop:10,background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:8,padding:"9px 12px",fontSize:12,color:"#166534"}}>
+                      💬 Nota: {jotformSel._comentario}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div style={{padding:"12px 24px",background:"#F8FAFC",borderTop:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:11,color:"#94A3B8"}}>
+              🔗 <a href={`https://form.jotform.com/${JOTFORM_FORM_ID}`} target="_blank" style={{color:"#2563EB",textDecoration:"none"}}>Ver formulario público</a>
+              {" · "}
+              <a href={`https://www.jotform.com/myforms/`} target="_blank" style={{color:"#2563EB",textDecoration:"none"}}>Ir a Jotform</a>
+            </span>
+            <button onClick={()=>{setShowJotform(false);setJotformSel(null);setJotformEditData(null);}}
+              style={{background:"#0F172A",color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",fontSize:12,cursor:"pointer",fontWeight:600}}>
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {showChecklist&&(()=>{
       // Calculate checklist steps completion
       const pasos=[
@@ -5257,10 +5565,339 @@ function CasoEditorSimple({caso,onChange,onDelete,isAdmin=true,equipo=[],cliente
   </div>);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MÓDULO JOTFORM — ASILO POLÍTICO
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Mapeo: pregunta Jotform → campo i589Draft de ImmigPath
+function mapJotformToI589(answers) {
+  const g = (label) => {
+    const key = Object.keys(answers).find(k =>
+      (answers[k]?.text||"").toLowerCase().includes(label.toLowerCase())
+    );
+    if(!key) return "";
+    const v = answers[key];
+    if(typeof v === "string") return v;
+    if(v && typeof v === "object"){
+      if(v.answer) return typeof v.answer === "object" ? Object.values(v.answer).join(" ") : String(v.answer);
+      if(v.prettyFormat) return v.prettyFormat;
+      if(v.first || v.last) return [v.first,v.middle,v.last].filter(Boolean).join(" ");
+    }
+    return "";
+  };
+  const byLabel = {};
+  Object.values(answers).forEach(a => {
+    if(a && a.text) byLabel[a.text.toLowerCase().trim()] = a;
+  });
+  const bl = (label) => {
+    const key = Object.keys(byLabel).find(k => k.includes(label.toLowerCase().trim()));
+    const v = key ? byLabel[key] : null;
+    if(!v) return "";
+    if(typeof v.answer === "string") return v.answer;
+    if(v.answer && typeof v.answer === "object") return Object.values(v.answer).join(" ");
+    if(v.prettyFormat) return v.prettyFormat;
+    return "";
+  };
+
+  // Nombre completo — Jotform puede tenerlo como nombre compuesto
+  const nombreRaw = bl("nombre completo");
+  const partes = nombreRaw.trim().split(/\s+/);
+  const nombre = partes.slice(0,-1).join(" ") || partes[0] || "";
+  const apellido = partes.length > 1 ? partes[partes.length-1] : "";
+
+  const sexoRaw = (bl("que genero es usted")||bl("genero")||"").toLowerCase();
+  const sexo = sexoRaw.includes("masculino")||sexoRaw.includes("hombre")||sexoRaw==="m" ? "M"
+             : sexoRaw.includes("femenin")||sexoRaw.includes("mujer")||sexoRaw==="f" ? "F" : "";
+
+  const estadoCivilRaw = (bl("estatus matrimonial")||"").toLowerCase();
+  const tieneConjuge = estadoCivilRaw.includes("casad") ? "si" : "no";
+  const estadoCivilEn = estadoCivilRaw.includes("casad") ? "Married"
+    : estadoCivilRaw.includes("solt") ? "Single"
+    : estadoCivilRaw.includes("divorciad") ? "Divorced"
+    : estadoCivilRaw.includes("viud") ? "Widowed" : estadoCivilRaw;
+
+  // Direccion
+  const dirRaw = bl("direccion actual donde vive") || bl("direccion actual");
+
+  // Ciudad y país de nacimiento
+  const paisCiudadNac = bl("pais y ciudad donde nacio") || "";
+  const paisCiudadParts = paisCiudadNac.split(",").map(s=>s.trim());
+  const ciudadNac = paisCiudadParts[0] || "";
+  const paisNac   = paisCiudadParts[1] || paisCiudadParts[0] || "";
+
+  // Pasaporte
+  const pasaporte = bl("numero de pasaporte") || bl("numero de pasaporte ");
+
+  // Hijos
+  const tieneHijosRaw = (bl("tiene hijo") || "").toLowerCase();
+  const tieneHijos = tieneHijosRaw.includes("si") || tieneHijosRaw.includes("sí") ? "si" : "no";
+
+  const hijos = [];
+  for(let i=1;i<=3;i++){
+    const hNombre = bl(`informacion hijo ${i}`);
+    const hDob    = bl(`fecha de nacimiento`); // simplificado; Jotform repite etiquetas
+    const hDonde  = bl(`donde nacio`);
+    if(hNombre){ hijos.push({ nombre:hNombre, dob:hDob, ciudad:hDonde, nac:"", sexo:"", enusa:"", incluir: bl(`va hacer incluido`) }); }
+  }
+
+  // Preguntas narrativas
+  const q1 = bl("explique las razones por que usted salio") || bl("explique las razones") || "";
+
+  // Padres
+  const madreNombre   = bl("nombre completo de su madre");
+  const madreNac      = bl("donde nacio su madre");
+  const madreUbicacion= bl("donde vive actualmente su madre");
+  const padreNombre   = bl("nombre completo de su padre");
+  const padreNac      = bl("donde nacio su padre");
+  const padreUbicacion= bl("donde vive actualmente su padre");
+
+  // Hermanos
+  const h1 = bl("hermano (a) 1 - nombre completo de su hermano (a)") || bl("hermano (a) 1");
+  const h2 = bl("hermano (a) 2 - nombre completo de su hermano (a)") || bl("hermano (a) 2");
+  const h3 = bl("hermano (a) 3 - nombre completo de su hermano (a)") || bl("hermano (a) 3");
+  const hermanos = [h1,h2,h3].filter(Boolean).join("\n");
+
+  // Empleo
+  const emp1 = [bl("empleo 1 - nombre de la empresa"), bl("cargo")].filter(Boolean).join(" — ");
+  const emp2 = [bl("empleo 2 - nombre de la empresa")].filter(Boolean).join(" — ");
+  const emp3 = [bl("empleo 3 - nombre de la empresa")].filter(Boolean).join(" — ");
+  const empleos = [emp1,emp2,emp3].filter(Boolean).join("\n");
+
+  // Educación
+  const edu1 = bl("nombre de la escuela primaria");
+  const edu2 = bl("nombre de la escuela secundaria");
+  const edu3 = bl("estudios adiciones - nombre de la institucion") || bl("estudios adicionales");
+  const educacion = [edu1,edu2,edu3].filter(Boolean).join("\n");
+
+  // Dirección de origen
+  const dirOrigen = bl("direccion de su pais") || bl("informacion direccion 1");
+  const dirDesde  = bl("fecha que comenzo a vivir");
+  const dirHasta  = bl("fecha que dejo de vivir");
+
+  // Residencias
+  const dir2 = bl("informacion direccion  2") || bl("informacion direccion 2");
+  const dir3 = bl("informacion direccion  3") || bl("informacion direccion 3");
+  const residencias = [dirOrigen, dir2, dir3].filter(Boolean).join("\n");
+
+  // Cónyuge
+  const conjNombre = bl("nombre completo de su esposo(a)") || bl("nombre completo de su esposo");
+  const conjDob    = bl("fecha de nacimiento de su esposo(a)") || bl("fecha de nacimiento de su esposo");
+  const conjPais   = bl("de que pais es su esposo(a)") || bl("de que pais es su esposo");
+  const conjUbic   = bl("donde se encuentra actualmente su esposo (a)") || bl("donde se encuentra actualmente su esposo");
+  const conjAlien  = bl("escriba el numero alien si su esposo (a) cuenta con uno");
+  const conjNac    = bl("donde nacio su esposo(a)") || bl("donde nacio su esposo");
+
+  return {
+    nombre, apellido,
+    alien: bl("numero alien ( si no tiene ponga n/a)") || bl("numero alien"),
+    telefono: bl("numero de telefono"),
+    direccion: dirRaw,
+    sexo,
+    dob: bl("fecha de nacimiento"),
+    "ciudad-nac": ciudadNac,
+    "pais-nac": paisNac,
+    nacionalidad: paisNac,
+    religion: bl("que religion practica"),
+    pasaporte,
+    "pasaporte-vence": bl("fecha que vence su pasaporte"),
+    "fecha-salida": bl("fecha de ultima vez en su pais"),
+    "fecha-entrada": bl("fecha que entro a estados unidos"),
+    "e1-lugar": bl("por que frontera entro a estados unidos"),
+    "e1-fecha": bl("fecha que entro a estados unidos"),
+    q1,
+    "estado-civil": estadoCivilEn,
+    "tiene-conyuge": tieneConjuge,
+    "c-nombre": conjNombre,
+    "c-dob": conjDob,
+    "c-pais": conjPais,
+    "c-ubicacion": conjUbic,
+    "c-alien": conjAlien,
+    "c-ciudad-nac": conjNac,
+    "tiene-hijos": tieneHijos,
+    hijos,
+    "madre-nombre": madreNombre,
+    "madre-nac": madreNac,
+    "madre-ubicacion": madreUbicacion,
+    "padre-nombre": padreNombre,
+    "padre-nac": padreNac,
+    "padre-ubicacion": padreUbicacion,
+    hermanos,
+    educacion,
+    empleos,
+    residencias,
+    "dir-origen": dirOrigen,
+    "dir-origen-desde": dirDesde,
+    "dir-origen-hasta": dirHasta,
+    savedAt: new Date().toISOString(),
+    status: "pendiente_revision",
+    fuenteJotform: true,
+  };
+}
+
+// Descarga del PDF original de Jotform vía iframe invisible
+window.descargarJotformOriginalPDF = function(submissionId) {
+  if(!submissionId){ alert("ID de submission no disponible"); return; }
+  const url = `https://www.jotform.com/submission/${submissionId}/pdf`;
+  window.open(url, "_blank");
+};
+
+// Descarga del I-589 USCIS con los datos del cliente (reutiliza la lógica del index)
+window.descargarI589DesdeSub = function(sub) {
+  if(!sub){ return; }
+  const clienteFake = { i589Draft: sub._i589mapped, nombre: sub._i589mapped?.nombre||"Cliente" };
+  if(typeof window.descargarI589PDF === "function"){
+    window.descargarI589PDF(clienteFake);
+  } else {
+    alert("La función de descarga I-589 no está disponible. Asegúrate de que el PDF base esté en GitHub.");
+  }
+};
+
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 
-// ── PDF I-589 ────────────────────────────────────────────────────────────────
-window.descargarI589PDF = function(cliente) {
+// ── PDF I-589 (versión oficial pdf-lib — llena el formulario USCIS real) ─────
+window.descargarI589PDF = async function(cliente, oficina, usuario) {
+  const d = cliente.i589Draft;
+  if(!d){ alert('Este cliente no tiene datos del I-589'); return; }
+  if(typeof PDFLib==='undefined'){ alert('Cargando librería PDF, intenta de nuevo en unos segundos'); return; }
+
+  try {
+    const P = 'form1[0].#subform[0].';
+    const baseUrl = 'i589-base.pdf';
+    const resp = await fetch(baseUrl);
+    if(!resp.ok) throw new Error('No se encontró el formulario base i589-base.pdf en el servidor');
+    const bytes = await resp.arrayBuffer();
+    const pdfDoc = await PDFLib.PDFDocument.load(bytes);
+    const form = pdfDoc.getForm();
+
+    const set = (nombre, valor) => {
+      if(!valor) return;
+      try { const f = form.getTextField(nombre); f.setText(String(valor).slice(0,150)); } catch(e){}
+    };
+    const setCheck = (nombre) => {
+      try { const c = form.getCheckBox(nombre); c.check(); } catch(e){}
+    };
+    const fmtD = v => { if(!v) return ''; const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m? m[2]+'/'+m[3]+'/'+m[1] : String(v); };
+    const lineas = v => String(v||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+
+    // Página 1
+    set(P+'PtAILine1_ANumber[0]', d.alien || d.alienNum || cliente.alienNum);
+    set(P+'PtAILine4_LastName[0]', d.apellido);
+    set(P+'PtAILine5_FirstName[0]', d.nombre);
+    set(P+'PtAILine8_StreetNumandName[0]', d.direccion);
+    set(P+'PtAILine8_TelephoneNumber[0]', (d.telefono||'').replace(/[^0-9]/g,'').slice(-7));
+    if(d.sexo==='M') setCheck(P+'PartALine9Sex[0]');
+    else if(d.sexo==='F') setCheck(P+'PartALine9Sex[1]');
+
+    // Página 2 — Cónyuge
+    const S = 'form1[0].#subform[1].NotMarried[0].';
+    const C2 = 'form1[0].#subform[1].';
+    if(d['tiene-conyuge']==='si'){
+      set(S+'PtAIILine5_LastName[0]', d['c-apellido']);
+      set(S+'PtAIILine6_FirstName[0]', d['c-nombre']);
+      set(S+'DateTimeField7[0]', fmtD(d['c-dob']));
+      set(S+'TextField10[3]', d['c-ciudad-nac']);
+      set(S+'TextField10[4]', d['c-nacionalidad']);
+      if(d['c-sexo']==='M') setCheck(S+'CheckBox14_Sex[0]');
+      else if(d['c-sexo']==='F') setCheck(S+'CheckBox14_Sex[1]');
+    } else if(d['tiene-conyuge']==='no'){
+      setCheck(C2+'CheckBox5[0]');
+    }
+
+    // Páginas 2-3 — Hijos
+    const hijosArr = Array.isArray(d.hijos)? d.hijos : [];
+    if(d['tiene-hijos']==='si' && hijosArr.length){
+      setCheck(C2+'ChildrenCheckbox[1]');
+      set(C2+'TotalChild[0]', String(hijosArr.length));
+      const C3='form1[0].#subform[3].';
+      const defs=[
+        {p:C2,suf:'1',sexo:'CheckBox12_Sex',enusa:'CheckBox17',incY:'PtAIILine21_Yes[0]',incN:'PtAIILine21_No[0]'},
+        {p:C3,suf:'2',sexo:'CheckBox26_Sex',enusa:'CheckBox27',incY:'PtAIILine21_Yes2[0]',incN:'PtAIILine21_No2[0]'},
+        {p:C3,suf:'3',sexo:'CheckBox36_Sex',enusa:'CheckBox37',incY:'PtAIILine21_Yes3[0]',incN:'PtAIILine21_No3[0]'},
+        {p:C3,suf:'4',sexo:'CheckBox46_Sex',enusa:'CheckBox47',incY:'PtAIILine21_Yes4[0]',incN:'PtAIILine21_No4[0]'},
+      ];
+      hijosArr.slice(0,4).forEach((h,i)=>{
+        const c=defs[i];
+        set(c.p+'ChildLast'+c.suf+'[0]', h.apellido);
+        set(c.p+'ChildFirst'+c.suf+'[0]', h.nombre);
+        set(c.p+'ChildDOB'+c.suf+'[0]', fmtD(h.dob));
+        set(c.p+'ChildNat'+c.suf+'[0]', h.nac);
+        set(c.p+'ChildCity'+c.suf+'[0]', h.ciudad);
+        if(h.sexo==='M') setCheck(c.p+c.sexo+'[0]'); else if(h.sexo==='F') setCheck(c.p+c.sexo+'[1]');
+      });
+    } else if(d['tiene-hijos']==='no'){
+      setCheck(C2+'ChildrenCheckbox[0]');
+    }
+
+    // Página 4 — Antecedentes
+    const Q='form1[0].#subform[4].';
+    set(Q+'TextField13[0]', d['dir-origen']);
+    set(Q+'DateTimeField21[0]', fmtD(d['dir-origen-desde']));
+    set(Q+'DateTimeField22[0]', fmtD(d['dir-origen-hasta']));
+    [8,12,16,20,24].forEach((row,i)=>{ const ln=lineas(d.residencias)[i]; if(ln) set(Q+'TextField13['+row+']', ln); });
+    [28,31,34,37].forEach((row,i)=>{ const ln=lineas(d.educacion)[i]; if(ln) set(Q+'TextField13['+row+']', ln); });
+    [40,42,44].forEach((row,i)=>{ const ln=lineas(d.empleos)[i]; if(ln) set(Q+'TextField13['+row+']', ln); });
+    set(Q+'TextField13[46]', d['madre-nombre']);
+    set(Q+'TextField13[47]', d['madre-nac']);
+    set(Q+'TextField35[0]',  d['madre-ubicacion']);
+    set(Q+'TextField13[48]', d['padre-nombre']);
+    set(Q+'TextField13[49]', d['padre-nac']);
+    set(Q+'TextField35[1]',  d['padre-ubicacion']);
+    [50,52,54,56].forEach((row,i)=>{ const ln=lineas(d.hermanos)[i]; if(ln) set(Q+'TextField13['+row+']', ln); });
+
+    // Página 9 — Firma
+    const N='form1[0].#subform[10].';
+    const nombreCompleto=((d.nombre||'')+' '+(d.apellido||'')).trim();
+    set(N+'TextField20[0]', nombreCompleto);
+    set(N+'TextField20[1]', nombreCompleto);
+    set(N+'DateTimeField48[0]', fmtD(d.savedAt||new Date().toISOString()));
+    if(d.firma && String(d.firma).startsWith('data:image/png')){
+      try{
+        const sigImg = await pdfDoc.embedPng(d.firma);
+        const sigField = form.getTextField(N+'TextField22[0]');
+        const rect = sigField.acroField.getWidgets()[0].getRectangle();
+        const pag9 = pdfDoc.getPage(8);
+        const esc = Math.min(rect.width/sigImg.width, rect.height/sigImg.height);
+        pag9.drawImage(sigImg, { x: rect.x+(rect.width-sigImg.width*esc)/2, y: rect.y+(rect.height-sigImg.height*esc)/2, width: sigImg.width*esc, height: sigImg.height*esc });
+      }catch(e){ console.warn('No se pudo estampar la firma:', e); }
+    }
+
+    // Página 9 — Parte E: Preparadora
+    if(!oficina) oficina = window._officeData || null;
+    if(!usuario) usuario = window._userData || null;
+    const prepNombre = (usuario && usuario.displayName) || (oficina && oficina.name) || '';
+    const prepDir    = (oficina && oficina.address) || '';
+    const prepTel    = ((oficina && oficina.phone) || '').replace(/[^0-9]/g,'');
+    if(prepNombre || prepDir || prepTel){
+      setCheck(N+'ckboxynd2[0]');
+      set(N+'PtE_PreparerName[0]', prepNombre);
+      set(N+'PtE_StreetNumAndName[0]', prepDir);
+      if(prepTel.length===10){
+        set(N+'TextField25[1]', prepTel.slice(0,3));
+        set(N+'TextField25[0]', prepTel.slice(3,6)+'-'+prepTel.slice(6));
+      } else if(prepTel){
+        set(N+'TextField25[0]', prepTel);
+      }
+    }
+
+    form.flatten();
+    const out = await pdfDoc.save();
+    const blob = new Blob([out], {type:'application/pdf'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const fname = ((d.nombre||'')+'-'+(d.apellido||'cliente')).replace(/[^a-zA-Z0-9]/g,'-');
+    a.href = url; a.download = 'I-589-'+fname+'.pdf';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    if(typeof showToastFn==='function') showToastFn('📥 I-589 oficial descargado','success');
+  } catch(e){
+    console.error('Error I-589:',e);
+    if(typeof showToastFn==='function') showToastFn('Error: '+e.message,'error');
+    else alert('Error: '+e.message);
+  }
+};
+
+// ── PDF I-589 BORRADOR (versión jsPDF — resumen visual) ──────────────────────
+window.descargarI589PDFBorrador = function(cliente) {
   const d = cliente.i589Draft;
   if(!d) return;
   const { jsPDF } = window.jspdf;
