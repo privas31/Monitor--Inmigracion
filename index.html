@@ -4050,8 +4050,12 @@ const loadTeam=async()=>{
                     </button>
 
                     <button onClick={()=>{
-                        const subConEdit = {...jotformSel, _i589mapped:{...jotformEditData}};
-                        window.descargarI589DesdeSub(subConEdit);
+                        // Usar _i589mapped de Firestore como base, sobreescribir con ediciones del usuario
+                        const base = jotformSel._i589mapped || {};
+                        const edits = jotformEditData || {};
+                        const merged = {...base};
+                        Object.keys(edits).forEach(k => { if(edits[k] !== '' && edits[k] !== null && edits[k] !== undefined) merged[k] = edits[k]; });
+                        window.descargarI589PDF({ i589Draft: merged });
                       }}
                       style={{width:"100%",padding:"10px",borderRadius:9,border:"1px solid #BBF7D0",background:"#F0FDF4",color:"#16A34A",cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
                       🏛️ PDF I-589 USCIS (con datos)
