@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2.1 busqueda-activa -->
+<!DOCTYPE html><!-- v2.2 jotform-mapeo-corregido -->
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
@@ -52,7 +52,7 @@
     const appPlatform = initializeApp(firebaseConfigPlatform, "platform");
     const dbPlatform = getFirestore(appPlatform);
     window._dbPlatform = dbPlatform;
-    console.log("%cImmigPath Monitor Personal — versión 2026-07-21-X","background:#2563EB;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
+    console.log("%cImmigPath Monitor Personal — versión 2026-07-22 | Jotform mapeo corregido + API Key activa","background:#2563EB;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
 
     // Cargar logo y nombre de oficina desde ?o= antes del login
     (async()=>{
@@ -408,7 +408,7 @@ function App(){
 
   // ── MÓDULO JOTFORM ASILO ──────────────────────────────────────────────────
   const JOTFORM_FORM_ID = "250147855559063";
-  const JOTFORM_API_KEY = ""; // ← Coloca aquí tu API Key de Jotform
+  const JOTFORM_API_KEY = "75b3c9967ba796a2f4a988519a37573a";
   const[showJotform,setShowJotform]=useState(false);
   const[jotformSubs,setJotformSubs]=useState([]);
   const[jotformLoading,setJotformLoading]=useState(false);
@@ -5625,200 +5625,342 @@ function CasoEditorSimple({caso,onChange,onDelete,isAdmin=true,equipo=[],cliente
 
 // Mapeo: pregunta Jotform → campo i589Draft de ImmigPath
 function mapJotformToI589(answers) {
-  // Helper principal — extrae el valor de una respuesta de Jotform
+
+  // ── HELPERS ──────────────────────────────────────────────────────────────
   const getVal = (v) => {
     if(!v) return "";
     const ans = v.answer;
-    if(!ans && ans !== 0) return v.prettyFormat || "";
-    if(typeof ans === "string") return ans;
+    if(ans === null || ans === undefined) return v.prettyFormat || "";
+    if(typeof ans === "string") return ans.trim();
     if(typeof ans === "number") return String(ans);
     if(typeof ans === "object"){
-      // Teléfono: {full: "(305) 260-9874"}
-      if(ans.full) return String(ans.full);
-      // Nombre: {first: "Juan", last: "Lopez"}
+      if(ans.full)        return String(ans.full).trim();                          // teléfono
       if(ans.first !== undefined || ans.last !== undefined)
-        return [ans.first,ans.middle,ans.last].filter(Boolean).join(" ");
-      // Dirección: {addr_line1, city, state, postal}
+        return [ans.first, ans.middle, ans.last].filter(Boolean).join(" ").trim(); // nombre
       if(ans.addr_line1 !== undefined)
-        return [ans.addr_line1, ans.city, ans.state, ans.postal].filter(Boolean).join(", ");
-      // Fecha: {month, day, year}
+        return [ans.addr_line1, ans.addr_line2, ans.city, ans.state, ans.postal]
+               .filter(Boolean).join(", ").trim();                                 // dirección
       if(ans.month !== undefined)
-        return `${ans.month}/${ans.day}/${ans.year}`;
-      // Fallback: unir valores
-      return Object.values(ans).filter(Boolean).join(" ");
+        return `${String(ans.month).padStart(2,'0')}/${String(ans.day).padStart(2,'0')}/${ans.year}`; // fecha
+      // objeto con subclaves (Pais/Ciudad, etc.)
+      return Object.values(ans).filter(Boolean).join(", ").trim();
     }
     return v.prettyFormat || "";
   };
 
-  // Buscar por texto de la pregunta (búsqueda parcial)
+  // Extraer subclave de un campo objeto (ej: ans.Pais, ans.Ciudad)
+  const getSub = (v, subkey) => {
+    if(!v) return "";
+    const ans = v.answer;
+    if(!ans || typeof ans !== "object") return "";
+    // buscar sin distinguir mayúsculas
+    const k = Object.keys(ans).find(k => k.toLowerCase() === subkey.toLowerCase());
+    return k ? String(ans[k]||"").trim() : "";
+  };
+
+  // Buscar campo por texto de la pregunta (coincidencia parcial, sin acentos)
+  const norm = s => (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim();
   const bl = (label) => {
-    const lbl = label.toLowerCase().trim();
-    const key = Object.keys(answers).find(k => {
-      const txt = (answers[k]?.text||"").toLowerCase().trim();
-      return txt === lbl || txt.includes(lbl);
-    });
+    const lbl = norm(label);
+    const key = Object.keys(answers).find(k => norm(answers[k]?.text||"").includes(lbl));
     return key ? getVal(answers[key]) : "";
   };
+  const blSub = (label, subkey) => {
+    const lbl = norm(label);
+    const key = Object.keys(answers).find(k => norm(answers[k]?.text||"").includes(lbl));
+    return key ? getSub(answers[key], subkey) : "";
+  };
 
-  // Buscar por orden numérico de campo (para campos con misma etiqueta repetida)
-  const getByOrder = (label, index) => {
-    const lbl = label.toLowerCase().trim();
-    const matches = Object.keys(answers)
-      .filter(k => (answers[k]?.text||"").toLowerCase().trim().includes(lbl))
+  // Buscar por índice cuando hay varias preguntas con el mismo texto
+  const blN = (label, index) => {
+    const lbl = norm(label);
+    const keys = Object.keys(answers)
+      .filter(k => norm(answers[k]?.text||"").includes(lbl))
       .sort((a,b) => parseInt(a)-parseInt(b));
-    const key = matches[index];
-    return key ? getVal(answers[key]) : "";
+    return keys[index] ? getVal(answers[keys[index]]) : "";
+  };
+  const blSubN = (label, subkey, index) => {
+    const lbl = norm(label);
+    const keys = Object.keys(answers)
+      .filter(k => norm(answers[k]?.text||"").includes(lbl))
+      .sort((a,b) => parseInt(a)-parseInt(b));
+    return keys[index] ? getSub(answers[keys[index]], subkey) : "";
   };
 
-  // ── Nombre completo ──
-  const nombreRaw = bl("nombre completo");
-  const partes = nombreRaw.trim().split(/\s+/);
-  const nombre = partes.slice(0,-1).join(" ") || partes[0] || "";
-  const apellido = partes.length > 1 ? partes[partes.length-1] : "";
+  // ── DATOS PERSONALES ─────────────────────────────────────────────────────
+  // Nombre completo (campo separado first/last)
+  const nombreFirst = blSub("nombre completo", "first") || blSub("nombre completo", "nombre");
+  const nombreLast  = blSub("nombre completo", "last")  || blSub("nombre completo", "apellidos");
+  const nombreRaw   = bl("nombre completo");
+  const nombre   = nombreFirst || nombreRaw.split(" ").slice(0,-1).join(" ") || nombreRaw;
+  const apellido = nombreLast  || (nombreRaw.includes(" ") ? nombreRaw.split(" ").slice(-1)[0] : "");
 
-  // ── Sexo ──
-  const sexoRaw = (bl("que genero es usted")||"").toLowerCase();
+  // Número Alien
+  const alien = bl("numero alien");
+
+  // Teléfono
+  const telefono = bl("numero de telefono");
+
+  // Sexo
+  const sexoRaw = norm(bl("que genero es usted"));
   const sexo = sexoRaw.includes("masculino")||sexoRaw.includes("hombre") ? "M"
-             : sexoRaw.includes("femenin")||sexoRaw.includes("mujer") ? "F" : "";
+             : sexoRaw.includes("femenin")||sexoRaw.includes("mujer")    ? "F" : "";
 
-  // ── Estado civil ──
-  const estadoCivilRaw = (bl("estatus matrimonial")||"").toLowerCase();
-  const tieneConjuge = estadoCivilRaw.includes("casad") ? "si" : "no";
-  const estadoCivilEn = estadoCivilRaw.includes("casad") ? "Married"
-    : estadoCivilRaw.includes("solt") ? "Single"
-    : estadoCivilRaw.includes("divorciad") ? "Divorced"
-    : estadoCivilRaw.includes("viud") ? "Widowed" : "";
+  // Fecha de nacimiento
+  const dob = blN("fecha de nacimiento", 0);
 
-  // ── País y ciudad de nacimiento ──
-  const paisCiudadRaw = bl("pais y ciudad donde nacio");
-  const pcParts = paisCiudadRaw.split(/[,\s]+/).map(s=>s.trim()).filter(Boolean);
-  const ciudadNac = pcParts[0] || "";
-  const paisNac = pcParts[1] || pcParts[0] || "";
+  // País y ciudad de nacimiento (campo con subclaves Pais / Ciudad)
+  const paisNac   = blSub("pais y ciudad donde nacio","pais")   || blSub("pais y ciudad donde nacio","país");
+  const ciudadNac = blSub("pais y ciudad donde nacio","ciudad");
 
-  // ── Dirección actual en EE.UU. ──
-  const dirRaw = bl("direccion actual donde vive");
+  // Religión
+  const religion = bl("que religion practica");
 
-  // ── Pasaporte ──
-  const pasaporte = bl("numero de pasaporte");
+  // Pasaporte
+  const pasaporte      = bl("numero de pasaporte");
+  const pasaporteVence = bl("fecha que vence su pasaporte");
 
-  // ── Hijos ──
-  const tieneHijosRaw = (bl("tiene hijo")||"").toLowerCase();
-  const tieneHijos = tieneHijosRaw.includes("si")||tieneHijosRaw.includes("sí") ? "si" : "no";
+  // Parole
+  // (campo informativo, no va al I-589 directamente)
 
-  // Hijos — los campos se repiten, usamos getByOrder
+  // ── DIRECCIÓN ACTUAL EE.UU. ───────────────────────────────────────────────
+  const dirCalle    = blSub("direccion actual donde vive","calle")        || blSub("direccion actual donde vive","addr_line1");
+  const dirApt      = blSub("direccion actual donde vive","numero de apartamento") || blSub("direccion actual donde vive","addr_line2");
+  const dirCiudad   = blSub("direccion actual donde vive","ciudad")       || blSub("direccion actual donde vive","city");
+  const dirEstado   = blSub("direccion actual donde vive","estado")       || blSub("direccion actual donde vive","state");
+  const dirZip      = blSub("direccion actual donde vive","codigo postal") || blSub("direccion actual donde vive","postal");
+  const direccion   = [dirCalle, dirApt].filter(Boolean).join(" Apt ") || bl("direccion actual donde vive");
+
+  // Fecha inicio en dirección actual
+  const dirDesdeActual = bl("fecha cuando inicio a vivir en su direccion actual");
+
+  // ── ESTADO CIVIL Y CÓNYUGE ────────────────────────────────────────────────
+  const estadoCivilRaw = norm(bl("estatus matrimonial"));
+  const tieneConjuge   = estadoCivilRaw.includes("casad") ? "si" : "no";
+  const estadoCivilEn  = estadoCivilRaw.includes("casad")    ? "Married"
+                       : estadoCivilRaw.includes("solt")     ? "Single"
+                       : estadoCivilRaw.includes("divorciad") ? "Divorced"
+                       : estadoCivilRaw.includes("viud")     ? "Widowed" : "";
+
+  const conjLugarCasamiento = bl("ciudad y pais se caso") || bl("indique en que ciudad y pais se caso");
+  const conjFechaMatrimonio = bl("fecha en que se caso");
+  const conjNombreFirst     = blSub("nombre completo de su esposo","first") || blSub("nombre completo de su esposo","nombre");
+  const conjNombreLast      = blSub("nombre completo de su esposo","last")  || blSub("nombre completo de su esposo","apellidos");
+  const conjNombre          = [conjNombreFirst, conjNombreLast].filter(Boolean).join(" ") || bl("nombre completo de su esposo");
+  const conjNacPais         = blSub("donde nacio su esposo","pais")   || blSub("donde nacio su esposo","país");
+  const conjNacCiudad       = blSub("donde nacio su esposo","ciudad");
+  const conjNac             = [conjNacCiudad, conjNacPais].filter(Boolean).join(", ") || bl("donde nacio su esposo");
+  const conjDob             = bl("fecha de nacimiento de su esposo");
+  const conjPais            = bl("de que pais es su esposo");
+  const conjUbicPais        = blSub("donde se encuentra actualmente su esposo","pais") || blSub("donde se encuentra actualmente su esposo","país");
+  const conjUbicCiudad      = blSub("donde se encuentra actualmente su esposo","ciudad");
+  const conjUbic            = [conjUbicCiudad, conjUbicPais].filter(Boolean).join(", ") || bl("donde se encuentra actualmente su esposo");
+  const conjAlien           = bl("numero alien si su esposo");
+
+  // ── HIJOS ─────────────────────────────────────────────────────────────────
+  const tieneHijosRaw = norm(bl("tiene hijo"));
+  const tieneHijos    = tieneHijosRaw.includes("si") ? "si" : "no";
+
   const hijos = [];
-  for(let i=0;i<3;i++){
-    const hNombre = getByOrder("informacion hijo", i);
-    const hDob = getByOrder("fecha de nacimiento", i+1); // índice +1 porque el 0 es el solicitante
-    const hDonde = getByOrder("donde nacio", i);
-    const hVive = getByOrder("donde vive actualmente", i);
-    const hAlien = getByOrder("numero alien (si aplica)", i);
-    const hIncluir = getByOrder("va hacer incluido", i);
-    if(hNombre) hijos.push({
-      nombre: hNombre.split(" ")[0]||"", apellido: hNombre.split(" ").slice(1).join(" ")||"",
-      dob: hDob, ciudad: hDonde, nac: hDonde,
-      enusa: hVive.toLowerCase().includes("usa")||hVive.toLowerCase().includes("united")?"si":"no",
-      alien: hAlien, incluir: hIncluir.toLowerCase().includes("si")?"si":"no", sexo:""
+  for(let i=0; i<3; i++){
+    const hNombreF  = blSubN("informacion hijo","first",i)  || blSubN("informacion hijo","nombre",i);
+    const hNombreL  = blSubN("informacion hijo","last",i)   || blSubN("informacion hijo","appelidos",i);
+    const hNombre   = [hNombreF,hNombreL].filter(Boolean).join(" ") || blN("informacion hijo",i);
+    if(!hNombre) continue;
+    const hDob      = blN("fecha de nacimiento", i+1); // i+1 porque el [0] es el solicitante
+    const hNacPais  = blSubN("donde nacio",  "pais",  i) || blSubN("donde nacio","país",i);
+    const hNacCiud  = blSubN("donde nacio",  "ciudad",i);
+    const hVivePais = blSubN("donde vive actualmente","pais",  i) || blSubN("donde vive actualmente","país",i);
+    const hViveCiud = blSubN("donde vive actualmente","ciudad",i);
+    const hAlien    = blN("numero alien (si aplica)", i);
+    const hIncluir  = norm(blN("va hacer incluido", i));
+    hijos.push({
+      nombre:   hNombreF || hNombre.split(" ")[0] || "",
+      apellido: hNombreL || hNombre.split(" ").slice(1).join(" ") || "",
+      dob:      hDob,
+      ciudad:   [hNacCiud, hNacPais].filter(Boolean).join(", "),
+      nac:      hNacPais || hNacCiud,
+      enusa:    (hVivePais+hViveCiud).toLowerCase().includes("usa")||
+                (hVivePais+hViveCiud).toLowerCase().includes("united states")||
+                (hVivePais+hViveCiud).toLowerCase().includes("estados unidos") ? "si" : "no",
+      alien:    hAlien,
+      incluir:  hIncluir.includes("si") ? "si" : "no",
+      sexo:     ""
     });
   }
 
-  // ── Narrativa Q1 ──
-  const q1 = bl("explique las razones por que usted salio") || bl("explique las razones");
+  // ── PADRES ────────────────────────────────────────────────────────────────
+  const padreNombreF    = blSub("nombre completo de su padre","first")  || blSub("nombre completo de su padre","nombre");
+  const padreNombreL    = blSub("nombre completo de su padre","last")   || blSub("nombre completo de su padre","apellidos");
+  const padreNombre     = [padreNombreF,padreNombreL].filter(Boolean).join(" ") || bl("nombre completo de su padre");
+  const padreNacPais    = blSub("donde nacio su padre","pais")  || blSub("donde nacio su padre","país");
+  const padreNacCiud    = blSub("donde nacio su padre","ciudad");
+  const padreNac        = [padreNacCiud,padreNacPais].filter(Boolean).join(", ") || bl("donde nacio su padre");
+  const padreUbicPais   = blSub("donde vive actualmente su padre","pais") || blSub("donde vive actualmente su padre","país");
+  const padreUbicCiud   = blSub("donde vive actualmente su padre","ciudad");
+  const padreUbicacion  = [padreUbicCiud,padreUbicPais].filter(Boolean).join(", ") || bl("donde vive actualmente su padre");
 
-  // ── Padres ──
-  const madreNombre    = bl("nombre completo de su madre");
-  const madreNac       = bl("donde nacio su madre");
-  const madreUbicacion = bl("donde vive actualmente su madre");
-  const padreNombre    = bl("nombre completo de su padre");
-  const padreNac       = bl("donde nacio su padre");
-  const padreUbicacion = bl("donde vive actualmente su padre");
+  const madreNombreF    = blSub("nombre completo de su madre","first")  || blSub("nombre completo de su madre","nombre");
+  const madreNombreL    = blSub("nombre completo de su madre","last")   || blSub("nombre completo de su madre","apellidos");
+  const madreNombre     = [madreNombreF,madreNombreL].filter(Boolean).join(" ") || bl("nombre completo de su madre");
+  const madreNacPais    = blSub("donde nacio su madre","pais")  || blSub("donde nacio su madre","país");
+  const madreNacCiud    = blSub("donde nacio su madre","ciudad");
+  const madreNac        = [madreNacCiud,madreNacPais].filter(Boolean).join(", ") || bl("donde nacio su madre");
+  const madreUbicPais   = blSub("donde vive actualmente su madre","pais") || blSub("donde vive actualmente su madre","país");
+  const madreUbicCiud   = blSub("donde vive actualmente su madre","ciudad");
+  const madreUbicacion  = [madreUbicCiud,madreUbicPais].filter(Boolean).join(", ") || bl("donde vive actualmente su madre");
 
-  // ── Hermanos ──
-  const h1 = bl("hermano (a) 1");
-  const h2 = bl("hermano (a) 2");
-  const h3 = bl("hermano (a) 3");
-  const hermanos = [h1,h2,h3].filter(Boolean).join("\n");
+  // ── HERMANOS ──────────────────────────────────────────────────────────────
+  const hermanosFmt = [0,1,2].map(i=>{
+    const hNF = blSubN("hermano","first",i)  || blSubN("hermano","nombre",i);
+    const hNL = blSubN("hermano","last",i)   || blSubN("hermano","apellidos",i);
+    const hN  = [hNF,hNL].filter(Boolean).join(" ") || blN("hermano",i);
+    const hNacP = blSubN("donde nacio su hermano","pais",i)  || blSubN("donde nacio su hermano","país",i);
+    const hNacC = blSubN("donde nacio su hermano","ciudad",i);
+    const hVivP = blSubN("donde vive actualmente su hermano","pais",i)  || blSubN("donde vive actualmente su hermano","país",i);
+    const hVivC = blSubN("donde vive actualmente su hermano","ciudad",i);
+    if(!hN) return "";
+    const nac  = [hNacC,hNacP].filter(Boolean).join(", ");
+    const vive = [hVivC,hVivP].filter(Boolean).join(", ");
+    return [hN, nac&&`Nació: ${nac}`, vive&&`Vive: ${vive}`].filter(Boolean).join(" | ");
+  }).filter(Boolean).join("\n");
 
-  // ── Empleos ──
-  const emp1n = bl("empleo 1 - nombre de la empresa");
-  const emp1c = getByOrder("cargo", 0);
-  const emp2n = bl("empleo 2 - nombre de la empresa");
-  const emp3n = bl("empleo 3 - nombre de la empresa");
-  const empleos = [
-    emp1n&&emp1c?`${emp1n} — ${emp1c}`:emp1n,
-    emp2n, emp3n
+  // ── EDUCACIÓN ─────────────────────────────────────────────────────────────
+  const edu1     = bl("nombre de la escuela primaria");
+  const edu1ini  = bl("fecha que inicio la primaria");
+  const edu1fin  = bl("fecha que termino la primaria");
+  const edu2     = bl("nombre de la escuela secundaria");
+  const edu2ini  = bl("fecha que inicio la secundaria");
+  const edu2fin  = bl("fecha que termino la secundaria");
+  const edu3     = bl("estudios adiciones") || bl("estudios adicionales");
+  const edu3ini  = blN("fecha que inicio",0);
+  const edu3fin  = blN("fecha que termino",0);
+  const educacion = [
+    edu1 && [edu1, edu1ini&&`${edu1ini}–${edu1fin}`].filter(Boolean).join(" | "),
+    edu2 && [edu2, edu2ini&&`${edu2ini}–${edu2fin}`].filter(Boolean).join(" | "),
+    edu3 && [edu3, edu3ini&&`${edu3ini}–${edu3fin}`].filter(Boolean).join(" | "),
   ].filter(Boolean).join("\n");
 
-  // ── Educación ──
-  const edu1 = bl("nombre de la escuela primaria");
-  const edu2 = bl("nombre de la escuela secundaria");
-  const edu3 = bl("estudios adiciones - nombre de la institucion");
-  const educacion = [edu1,edu2,edu3].filter(Boolean).join("\n");
+  // ── EMPLEOS ───────────────────────────────────────────────────────────────
+  const emp = [0,1,2].map(i=>{
+    const n   = blN("nombre de la empresa",i);
+    const c   = blN("cargo",i);
+    const ini = blN("fecha que inicio ese empleo",i) || blN("fecha que inicio",i+1);
+    const fin = blN("fecha que termino",i+1);
+    if(!n) return "";
+    return [n, c, ini&&`${ini}–${fin||"presente"}`].filter(Boolean).join(" | ");
+  }).filter(Boolean).join("\n");
 
-  // ── Direcciones ──
-  const dirOrigen = bl("direccion de su pais");
-  const dirDesde  = getByOrder("fecha que comenzo a vivir", 0);
-  const dirHasta  = getByOrder("fecha que dejo de vivir", 0);
-  const dir2 = bl("informacion direccion  2") || getByOrder("direccion", 1);
-  const dir3 = bl("informacion direccion  3") || getByOrder("direccion", 2);
-  const residencias = [dirOrigen, dir2, dir3].filter(Boolean).join("\n");
+  // ── DIRECCIONES / HISTORIAL ───────────────────────────────────────────────
+  // Dirección en país de origen
+  const dirOrigenCalle  = blSub("direccion de su pais","calle")         || blSub("direccion de su pais","addr_line1");
+  const dirOrigenCiud   = blSub("direccion de su pais","ciudad")        || blSub("direccion de su pais","city");
+  const dirOrigenEst    = blSub("direccion de su pais","estado")        || blSub("direccion de su pais","state") || blSub("direccion de su pais","estado/ provincia");
+  const dirOrigenPais   = blSub("informacion direccion 1","pais")       || blSub("informacion direccion 1","país");
+  const dirOrigen       = [dirOrigenCalle, dirOrigenCiud, dirOrigenEst, dirOrigenPais].filter(Boolean).join(", ") || bl("direccion de su pais");
+  const dirOrigenDesde  = blN("fecha que comenzo a vivir",0);
+  const dirOrigenHasta  = blN("fecha que dejo de vivir",0);
 
-  // ── Entrada a EE.UU. ──
-  const e1fecha  = bl("fecha que entro a estados unidos");
-  const e1lugar  = bl("por que frontera entro a estados unidos");
+  // Segunda dirección (cuando llegó a USA)
+  const dir2Pais  = blSub("direccion cuando llego a usa","pais")  || blSub("direccion cuando llego a usa","país");
+  const dir2Ciud  = blSub("direccion cuando llego a usa","ciudad");
+  const dir2Str   = [dir2Ciud,dir2Pais].filter(Boolean).join(", ") || bl("direccion cuando llego a usa");
+  const dir2Desde = blN("fecha que comenzo a vivir",1);
+  const dir2Hasta = blN("fecha que dejo de vivir",1);
 
-  // ── Cónyuge ──
-  const conjNombre = bl("nombre completo de su esposo(a)") || bl("nombre completo de su esposo");
-  const conjDob    = bl("fecha de nacimiento de su esposo(a)");
-  const conjPais   = bl("de que pais es su esposo(a)");
-  const conjUbic   = bl("donde se encuentra actualmente su esposo");
-  const conjAlien  = bl("escriba el numero alien si su esposo");
-  const conjNac    = bl("donde nacio su esposo(a)");
+  // Tercera dirección
+  const dir3Pais  = blSub("informacion direccion 3","pais")  || blSub("informacion direccion 3","país");
+  const dir3Ciud  = blSub("informacion direccion 3","ciudad");
+  const dir3Str   = [dir3Ciud,dir3Pais].filter(Boolean).join(", ") || bl("informacion direccion 3");
+  const dir3Desde = blN("fecha que comenzo a vivir",2);
+  const dir3Hasta = blN("fecha que dejo de vivir",2);
 
+  const residencias = [dirOrigen, dir2Str, dir3Str].filter(Boolean).join("\n");
+
+  // ── ENTRADAS A EE.UU. ─────────────────────────────────────────────────────
+  const e1fecha    = bl("fecha que entro a estados unidos");
+  const e1lugarCiu = blSub("por que frontera entro a estados unidos","ciudad");
+  const e1lugarEst = blSub("por que frontera entro a estados unidos","estado");
+  const e1lugar    = [e1lugarCiu, e1lugarEst].filter(Boolean).join(", ") || bl("por que frontera entro a estados unidos");
+  const otrasEntradas = bl("si tiene mas de una entrada");
+
+  // ¿Vivió en otro país más de 30 días?
+  const otroPaisRaw = norm(bl("ha vivido en otro pais mas de"));
+  const otroPais    = otroPaisRaw.includes("si") ? "si" : "no";
+  const otroPaisNom = bl("indique el nombre del pais");
+
+  // ── FECHA SALIDA PAÍS ─────────────────────────────────────────────────────
+  const fechaSalida = bl("fecha de ultima vez en su pais");
+
+  // ── NARRATIVA ─────────────────────────────────────────────────────────────
+  const q1 = bl("explique las razones por que usted salio") || bl("explique las razones");
+
+  // ── RETORNO ───────────────────────────────────────────────────────────────
   return {
-    nombre, apellido,
-    alien: bl("numero alien ( si no tiene ponga n/a)") || bl("numero alien"),
-    telefono: bl("numero de telefono"),
-    direccion: dirRaw,
+    nombre,
+    apellido,
+    alien,
+    telefono,
+    direccion,
+    "dir-apt":        dirApt,
+    "dir-ciudad":     dirCiudad,
+    "dir-estado":     dirEstado,
+    "dir-zip":        dirZip,
+    "dir-inicio":     dirDesdeActual,
     sexo,
-    dob: bl("fecha de nacimiento"),
-    "ciudad-nac": ciudadNac,
-    "pais-nac": paisNac,
-    nacionalidad: paisNac,
-    religion: bl("que religion practica"),
+    dob,
+    "ciudad-nac":     ciudadNac,
+    "pais-nac":       paisNac,
+    nacionalidad:     paisNac,
+    "nacionalidad-nac": paisNac,
+    religion,
     pasaporte,
-    "pasaporte-vence": bl("fecha que vence su pasaporte"),
-    "fecha-salida": bl("fecha de ultima vez en su pais"),
-    "fecha-entrada": bl("fecha que entro a estados unidos"),
-    "e1-lugar": bl("por que frontera entro a estados unidos"),
-    "e1-fecha": bl("fecha que entro a estados unidos"),
+    "pasaporte-vence": pasaporteVence,
+    "fecha-salida":   fechaSalida,
+    "fecha-entrada":  e1fecha,
+    "e1-fecha":       e1fecha,
+    "e1-lugar":       e1lugar,
+    "otras-entradas": otrasEntradas,
+    "otro-pais":      otroPais,
+    "otro-pais-nombre": otroPaisNom,
     q1,
-    "estado-civil": estadoCivilEn,
-    "tiene-conyuge": tieneConjuge,
-    "c-nombre": conjNombre,
-    "c-dob": conjDob,
-    "c-pais": conjPais,
-    "c-ubicacion": conjUbic,
-    "c-alien": conjAlien,
-    "c-ciudad-nac": conjNac,
-    "tiene-hijos": tieneHijos,
+    "estado-civil":   estadoCivilEn,
+    "tiene-conyuge":  tieneConjuge,
+    "c-nombre":       conjNombre,
+    "c-apellido":     conjNombreLast,
+    "c-dob":          conjDob,
+    "c-pais":         conjPais,
+    "c-ciudad-nac":   conjNac,
+    "c-ubicacion":    conjUbic,
+    "c-alien":        conjAlien,
+    "c-lugar-mat":    conjLugarCasamiento,
+    "c-fecha-mat":    conjFechaMatrimonio,
+    "c-enusa":        conjUbic.toLowerCase().includes("usa")||conjUbic.toLowerCase().includes("united states")||conjUbic.toLowerCase().includes("estados unidos") ? "si" : "no",
+    "c-incluir":      "no", // se decide en la oficina
+    "tiene-hijos":    tieneHijos,
     hijos,
-    "madre-nombre": madreNombre,
-    "madre-nac": madreNac,
+    "madre-nombre":   madreNombre,
+    "madre-nac":      madreNac,
     "madre-ubicacion": madreUbicacion,
-    "padre-nombre": padreNombre,
-    "padre-nac": padreNac,
+    "padre-nombre":   padreNombre,
+    "padre-nac":      padreNac,
     "padre-ubicacion": padreUbicacion,
-    hermanos,
+    hermanos:         hermanosFmt,
     educacion,
-    empleos,
+    empleos:          emp,
     residencias,
-    "dir-origen": dirOrigen,
-    "dir-origen-desde": dirDesde,
-    "dir-origen-hasta": dirHasta,
-    savedAt: new Date().toISOString(),
-    status: "pendiente_revision",
-    fuenteJotform: true,
+    "dir-origen":     dirOrigen,
+    "dir-origen-desde": dirOrigenDesde,
+    "dir-origen-hasta": dirOrigenHasta,
+    "dir2":           dir2Str,
+    "dir2-desde":     dir2Desde,
+    "dir2-hasta":     dir2Hasta,
+    "dir3":           dir3Str,
+    "dir3-desde":     dir3Desde,
+    "dir3-hasta":     dir3Hasta,
+    savedAt:          new Date().toISOString(),
+    status:           "pendiente_revision",
+    fuenteJotform:    true,
   };
 }
 
@@ -5872,20 +6014,71 @@ window.descargarI589PDF = async function(cliente, oficina, usuario) {
       try { const c = form.getCheckBox(nombre); c.check(); } catch(e){}
     };
 
+    // ==== Helpers de formato ====
+    const fmtD = v => { if(!v) return ''; const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m? m[2]+'/'+m[3]+'/'+m[1] : String(v); };
+    const lineas = v => String(v||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+
     // 3. Mapear datos del cliente (i589Draft) → campos del PDF oficial (PÁGINA 1)
     set(P+'PtAILine1_ANumber[0]', d.alien || d.alienNum || cliente.alienNum);
     set(P+'PtAILine4_LastName[0]', d.apellido);
     set(P+'PtAILine5_FirstName[0]', d.nombre);
-    set(P+'PtAILine8_StreetNumandName[0]', d.direccion);
-    set(P+'PtAILine8_TelephoneNumber[0]', (d.telefono||'').replace(/[^0-9]/g,'').slice(-7));
+
+    // Dirección: calle + ciudad + estado + zip en sus campos separados
+    const dirCalle = d['dir-calle'] || d.direccion || '';
+    set(P+'PtAILine8_StreetNumandName[0]', dirCalle);
+    set(P+'PtAILine8_AptNumber[0]',  d['dir-apt']    || '');
+    set(P+'PtAILine8_City[0]',        d['dir-ciudad'] || '');  // si el campo existe
+    set(P+'PtAILine8_State[0]',       d['dir-estado'] || '');
+    set(P+'PtAILine8_Zipcode[0]',     d['dir-zip']    || '');
+
+    // Teléfono — separar área y número
+    const telDigits = (d.telefono||'').replace(/[^0-9]/g,'');
+    if(telDigits.length === 10){
+      set(P+'PtAILine8_AreaCode[0]',       telDigits.slice(0,3));
+      set(P+'PtAILine8_TelephoneNumber[0]', telDigits.slice(3));
+    } else if(telDigits.length === 7){
+      set(P+'PtAILine8_TelephoneNumber[0]', telDigits);
+    } else {
+      set(P+'PtAILine8_TelephoneNumber[0]', telDigits);
+    }
 
     // Sexo (checkbox): PartALine9Sex[0]=Male, [1]=Female
     if(d.sexo==='M') setCheck(P+'PartALine9Sex[0]');
     else if(d.sexo==='F') setCheck(P+'PartALine9Sex[1]');
 
-    // ==== Helpers de formato ====
-    const fmtD = v => { if(!v) return ''; const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m? m[2]+'/'+m[3]+'/'+m[1] : String(v); };
-    const lineas = v => String(v||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    // Estado civil
+    const ecMap = {'Married':'M','Single':'S','Divorced':'D','Widowed':'W'};
+    const ecKey = ecMap[d['estado-civil']];
+    if(ecKey==='S') setCheck(P+'Marital[0]');
+    else if(ecKey==='M') setCheck(P+'Marital[1]');
+    else if(ecKey==='D') setCheck(P+'Marital[2]');
+    else if(ecKey==='W') setCheck(P+'Marital[3]');
+
+    // Fecha de nacimiento y lugar
+    set(P+'DateTimeField1[0]', fmtD ? fmtD(d.dob) : d.dob);
+    set(P+'TextField1[4]', [d['ciudad-nac'], d['pais-nac']].filter(Boolean).join(', '));
+
+    // Nacionalidad, religión
+    set(P+'TextField1[5]', d.nacionalidad || d['pais-nac'] || '');
+    set(P+'TextField1[6]', d['nacionalidad-nac'] || d['pais-nac'] || '');
+    set(P+'TextField1[7]', d.religion || '');
+
+    // Pasaporte
+    set(P+'TextField5[0]', d['pais-nac'] || '');   // país que emitió pasaporte
+    set(P+'TextField5[1]', d.pasaporte   || '');   // número pasaporte
+    set(P+'DateTimeField6[0]', fmtD ? fmtD(d['pasaporte-vence']) : d['pasaporte-vence'] || '');
+
+    // Idioma nativo (usamos el país de nacimiento como referencia)
+    // (campo 23 — solo si lo tienes guardado)
+
+    // Fecha que salió del país (19a) e I-94 (19b)
+    set(P+'DateTimeField2[0]', fmtD ? fmtD(d['fecha-salida']) : d['fecha-salida'] || '');
+    set(P+'TextField3[0]',     d.i94 || '');
+
+    // 19c — Entradas a EE.UU. (primera entrada)
+    set(P+'DateTimeField3[0]', fmtD ? fmtD(d['e1-fecha']) : d['e1-fecha'] || '');
+    set(P+'TextField4[0]',     d['e1-lugar'] || '');
+    set(P+'TextField4[1]',     d['e1-estatus'] || '');
 
     // ==== PÁGINA 2 — Cónyuge (Parte A.II) ====
     const S = 'form1[0].#subform[1].NotMarried[0].';
