@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2.2 jotform-datos-reales -->
+<!DOCTYPE html><!-- v2.4 nav-tabler-icons -->
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
@@ -52,7 +52,7 @@
     const appPlatform = initializeApp(firebaseConfigPlatform, "platform");
     const dbPlatform = getFirestore(appPlatform);
     window._dbPlatform = dbPlatform;
-    console.log("%cImmigPath Monitor Personal — versión 2026-07-22 | mapeo Jotform corregido","background:#2563EB;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
+    console.log("%cImmigPath Monitor Personal — versión 2026-07-23 | iconos Tabler en nav","background:#2563EB;color:#fff;padding:3px 10px;border-radius:6px;font-weight:bold");
 
     // Cargar logo y nombre de oficina desde ?o= antes del login
     (async()=>{
@@ -73,6 +73,7 @@
     })();
   </script>
   <style>* { box-sizing:border-box; margin:0; padding:0; } body { font-family:'Segoe UI',Inter,sans-serif; background:#F1F5F9; } ::-webkit-scrollbar{width:6px} ::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css"/>
 </head>
 <body>
 <div id="root"></div>
@@ -382,6 +383,23 @@ function App(){
   const[showPDF,setShowPDF]=useState(false);
   const[showHistorial,setShowHistorial]=useState(false);
   const[showAlertas,setShowAlertas]=useState(false);
+  const[showPendientes,setShowPendientes]=useState(false);
+  const[pendientes,setPendientes]=useState(()=>{try{const s=localStorage.getItem('ip_pendientes');return s?JSON.parse(s):[];}catch(e){return[];}});
+  const[nuevoPendiente,setNuevoPendiente]=useState('');
+  const agregarPendiente=()=>{
+    const txt=(nuevoPendiente||'').trim();
+    if(!txt)return;
+    const nuevo={id:Date.now(),texto:txt,fecha:new Date().toLocaleString('es',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})};
+    const lista=[nuevo,...pendientes];
+    setPendientes(lista);
+    localStorage.setItem('ip_pendientes',JSON.stringify(lista));
+    setNuevoPendiente('');
+  };
+  const borrarPendiente=(id)=>{
+    const lista=pendientes.filter(p=>p.id!==id);
+    setPendientes(lista);
+    localStorage.setItem('ip_pendientes',JSON.stringify(lista));
+  };
   const[showServicioAdicional,setShowServicioAdicional]=useState(null);
   const[servicioStep,setServicioStep]=useState(1);
   const[servicioForm,setServicioForm]=useState({});
@@ -1807,21 +1825,22 @@ const loadTeam=async()=>{
 
   // ── SIDEBAR NAV ITEMS ──────────────────────────────────────────────────────
   const navItems = [
-    {id:"monitor",   label:t("Casos","Cases"),  icon:"💼", onClick:()=>{setActiveNav("monitor");}},
-    {id:"checklist", label:t("Primeros pasos","Getting started"), icon:"🚀", onClick:()=>setShowChecklist(true)},
-    {id:"alertas",   label:t("Alertas","Alerts"),                  icon:"🔔", badge: (stats.alertas.length+stats.vencidos.length+stats.eadElegibles.length+solicitudesServicio.length)||null, onClick:()=>setShowAlertas(true)},
-    {id:"dashboard", label:t("Dashboard","Dashboard"),             icon:"📊", badge: isAdmin?(stats.alertas.length+stats.vencidos.length)||null:null, onClick:()=>setShowDashboard(true)},
-    {id:"formularios",label:t("Formularios","Forms"),              icon:"📋", badge:borradoresPendientes||null, onClick:()=>{setShowBorradores(true);loadBorradores();}},
-    {id:"pagos",     label:t("Pagos","Payments"),                  icon:"💳", show:isAdmin, onClick:()=>setShowPagosReporte(true)},
-    {id:"equipo",    label:t("Equipo","Team"),                     icon:"🤝", show:isAdmin, onClick:()=>{setShowTeam(true);loadOfficeUsers();}},
-    {id:"usuarios",  label:t("Usuarios","Users"),                  icon:"🔐", show:isAdmin, onClick:()=>setShowAddUser(true)},
-    {id:"reportes",  label:t("Reportes","Reports"),                icon:"📈", show:isAdmin, onClick:()=>setShowPDF(true)},
-    {id:"jotform",  label:"Jotform — Asilo", icon:"📥", badge:jotformPendientes||null, onClick:()=>{setShowJotform(true);loadJotformSubs();}},
+    {id:"monitor",   label:t("Casos","Cases"),  icon:"ti-briefcase", onClick:()=>{setActiveNav("monitor");}},
+    {id:"checklist", label:t("Primeros pasos","Getting started"), icon:"ti-rocket", onClick:()=>setShowChecklist(true)},
+    {id:"alertas",   label:t("Alertas","Alerts"),                  icon:"ti-bell", badge: (stats.alertas.length+stats.vencidos.length+stats.eadElegibles.length+solicitudesServicio.length)||null, onClick:()=>setShowAlertas(true)},
+    {id:"pendientes", label:t("Pendientes","To-Do"), icon:"ti-clipboard-list", badge:pendientes.length||null, onClick:()=>setShowPendientes(true)},
+    {id:"dashboard", label:t("Dashboard","Dashboard"),             icon:"ti-chart-bar", badge: isAdmin?(stats.alertas.length+stats.vencidos.length)||null:null, onClick:()=>setShowDashboard(true)},
+    {id:"formularios",label:t("Formularios","Forms"),              icon:"ti-file-description", badge:borradoresPendientes||null, onClick:()=>{setShowBorradores(true);loadBorradores();}},
+    {id:"pagos",     label:t("Pagos","Payments"),                  icon:"ti-credit-card", show:isAdmin, onClick:()=>setShowPagosReporte(true)},
+    {id:"equipo",    label:t("Equipo","Team"),                     icon:"ti-users", show:isAdmin, onClick:()=>{setShowTeam(true);loadOfficeUsers();}},
+    {id:"usuarios",  label:t("Usuarios","Users"),                  icon:"ti-lock", show:isAdmin, onClick:()=>setShowAddUser(true)},
+    {id:"reportes",  label:t("Reportes","Reports"),                icon:"ti-chart-line", show:isAdmin, onClick:()=>setShowPDF(true)},
+    {id:"jotform",  label:"Jotform — Asilo", icon:"ti-download", badge:jotformPendientes||null, onClick:()=>{setShowJotform(true);loadJotformSubs();}},
     {id:"sec-herramientas", section:t("Herramientas","Tools")},
-    {id:"uscis",     label:t("Verificador USCIS","USCIS Checker")+(uscisHabilitado?"":" 🔒"), icon:"🔎", onClick:()=>{setShowUSCIS(true);if(uscisHabilitado)loadCasosUscis();}},
-    {id:"envios",    label:t("Control de envíos","Shipments")+(enviosHabilitado?"":" 🔒"), icon:"📦", onClick:()=>{setShowEnvios(true);if(enviosHabilitado)loadEnvios();}},
+    {id:"uscis",     label:t("Verificador USCIS","USCIS Checker")+(uscisHabilitado?"":" 🔒"), icon:"ti-search", onClick:()=>{setShowUSCIS(true);if(uscisHabilitado)loadCasosUscis();}},
+    {id:"envios",    label:t("Control de envíos","Shipments")+(enviosHabilitado?"":" 🔒"), icon:"ti-package", onClick:()=>{setShowEnvios(true);if(enviosHabilitado)loadEnvios();}},
     {id:"sec-sistema", section:t("Sistema","System"), show:isAdmin},
-    {id:"config",    label:t("Configuración","Settings"),          icon:"⚙️", show:isAdmin, onClick:()=>setShowPagosConfig(true)},
+    {id:"config",    label:t("Configuración","Settings"),          icon:"ti-settings", show:isAdmin, onClick:()=>setShowPagosConfig(true)},
   ];
 
   return(<div style={{fontFamily:"'Segoe UI',Inter,system-ui,sans-serif",minHeight:"100vh",background:"#F8FAFC",display:"flex"}}>
@@ -1847,13 +1866,13 @@ const loadTeam=async()=>{
           const handleClick = ()=>{ setActiveNav(n.id); n.onClick&&n.onClick(); };
           if(n.href) return(
             <a key={n.id} href={n.href} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 20px",textDecoration:"none",color:active?"#2563EB":"#64748B",background:active?"#EFF6FF":"transparent",borderLeft:active?"3px solid #2563EB":"3px solid transparent",fontSize:13,fontWeight:active?600:400,transition:"all 0.15s"}}>
-              <span style={{fontSize:15,width:20,textAlign:"center"}}>{n.icon}</span>
+              <i className={`ti ${n.icon}`} style={{fontSize:16,width:18,textAlign:"center",flexShrink:0}}></i>
               <span style={{flex:1}}>{n.label}</span>
             </a>
           );
           return(
             <button key={n.id} onClick={handleClick} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 20px",background:active?"#EFF6FF":"transparent",border:"none",borderLeft:active?"3px solid #2563EB":"3px solid transparent",color:active?"#2563EB":"#64748B",fontSize:13,fontWeight:active?600:400,cursor:"pointer",textAlign:"left",position:"relative",transition:"all 0.15s"}}>
-              <span style={{fontSize:15,width:20,textAlign:"center"}}>{n.icon}</span>
+              <i className={`ti ${n.icon}`} style={{fontSize:16,width:18,textAlign:"center",flexShrink:0}}></i>
               <span style={{flex:1}}>{n.label}</span>
               {n.badge>0&&<span style={{background:"#EF4444",color:"#fff",borderRadius:20,padding:"1px 6px",fontSize:10,fontWeight:700,minWidth:18,textAlign:"center"}}>{n.badge}</span>}
             </button>
@@ -2898,6 +2917,48 @@ const loadTeam=async()=>{
       </div>
     )}
 
+    {showPendientes&&(
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:60}}>
+        <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:580,maxHeight:"80vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
+          <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #F1F5F9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:20}}>📝</span>
+              <span style={{fontWeight:700,fontSize:17,color:"#0F172A"}}>{t("Pendientes","To-Do")}</span>
+              {pendientes.length>0&&<span style={{background:"#FEF3C7",color:"#92400E",fontSize:12,fontWeight:600,padding:"2px 8px",borderRadius:10}}>{pendientes.length}</span>}
+            </div>
+            <button onClick={()=>setShowPendientes(false)} style={{background:"#F1F5F9",border:"none",borderRadius:8,padding:"6px 14px",fontSize:13,cursor:"pointer",fontWeight:600}}>✕ Cerrar</button>
+          </div>
+          <div style={{padding:"16px 24px",borderBottom:"1px solid #F1F5F9",display:"flex",gap:8}}>
+            <input
+              value={nuevoPendiente}
+              onChange={e=>setNuevoPendiente(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&agregarPendiente()}
+              placeholder={t("Agregar pendiente... ej: Revisar caso López, falta I-94","Add to-do...")}
+              style={{flex:1,padding:"9px 14px",borderRadius:9,border:"1px solid #E2E8F0",fontSize:13,outline:"none"}}
+            />
+            <button onClick={agregarPendiente} style={{background:"#F59E0B",color:"#fff",border:"none",borderRadius:9,padding:"9px 18px",fontSize:13,fontWeight:600,cursor:"pointer"}}>+ {t("Agregar","Add")}</button>
+          </div>
+          <div style={{flex:1,overflowY:"auto",padding:"12px 24px 20px",display:"flex",flexDirection:"column",gap:8}}>
+            {pendientes.length===0&&(
+              <div style={{textAlign:"center",padding:"40px 0",color:"#94A3B8"}}>
+                <div style={{fontSize:32,marginBottom:8}}>✅</div>
+                <div style={{fontSize:14}}>{t("Sin pendientes — todo al día","No pending tasks")}</div>
+              </div>
+            )}
+            {pendientes.map(p=>(
+              <div key={p.id} style={{display:"flex",alignItems:"flex-start",gap:12,padding:"11px 14px",background:"#FAFAFA",border:"1px solid #F1F5F9",borderRadius:10}}>
+                <button onClick={()=>borrarPendiente(p.id)} title="Marcar como listo" style={{background:"#DCFCE7",border:"1px solid #BBF7D0",borderRadius:"50%",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,marginTop:1,fontSize:12,color:"#16A34A",padding:0}}>✓</button>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,color:"#0F172A",lineHeight:1.4}}>{p.texto}</div>
+                  <div style={{fontSize:11,color:"#94A3B8",marginTop:3}}>{p.fecha}</div>
+                </div>
+                <button onClick={()=>borrarPendiente(p.id)} style={{background:"none",border:"none",color:"#CBD5E1",cursor:"pointer",fontSize:15,padding:0,lineHeight:1}} title="Eliminar">🗑</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )}
     {showDashboard&&(
       <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:16,overflowY:"auto"}}>
         <div style={{background:"#F1F5F9",borderRadius:20,width:"100%",maxWidth:780,padding:28,boxShadow:"0 24px 64px rgba(0,0,0,0.25)",maxHeight:"92vh",overflowY:"auto"}}>
