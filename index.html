@@ -4050,10 +4050,7 @@ const loadTeam=async()=>{
                     </button>
 
                     <button onClick={()=>{
-                        // Combinar _i589mapped completo de Firestore con las ediciones del usuario
-                        const baseData = jotformSel._i589mapped||{};
-                        const merged = {...baseData, ...jotformEditData};
-                        const subConEdit = {...jotformSel, _i589mapped: merged};
+                        const subConEdit = {...jotformSel, _i589mapped:{...jotformEditData}};
                         window.descargarI589DesdeSub(subConEdit);
                       }}
                       style={{width:"100%",padding:"10px",borderRadius:9,border:"1px solid #BBF7D0",background:"#F0FDF4",color:"#16A34A",cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
