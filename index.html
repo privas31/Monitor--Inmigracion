@@ -5861,6 +5861,7 @@ function mapJotformToI589(answers) {
     alien,
     telefono,
     direccion,
+    "dir-calle":     dirCalle,
     "dir-apt":       dirApt,
     "dir-ciudad":    dirCiudad,
     "dir-estado":    dirEstado,
@@ -5979,8 +5980,9 @@ window.descargarI589PDF = async function(cliente, oficina, usuario) {
     set(P+'PtAILine4_LastName[0]', d.apellido);
     set(P+'PtAILine5_FirstName[0]', d.nombre);
     // Dirección — ahora viene separada en subcampos
-    set(P+'PtAILine8_StreetNumandName[0]', d['dir-calle'] || d.direccion || '');
+    set(P+'PtAILine8_StreetNumandName[0]', d['dir-calle'] || '');
     set(P+'PtAILine8_AptNumber[0]',        d['dir-apt']    || '');
+    set(P+'TextField1[2]',                 d['dir-ciudad'] || '');  // City
     set(P+'PtAILine8_State[0]',            d['dir-estado'] || '');
     set(P+'PtAILine8_Zipcode[0]',          d['dir-zip']    || '');
     // Teléfono — separar área y número
