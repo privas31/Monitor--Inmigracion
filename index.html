@@ -1681,11 +1681,11 @@ const loadTeam=async()=>{
       if(existente){
         const cambios={corte:eoirForm.corte||existente.corte||"",juez:eoirForm.juez||existente.juez||"",nota:eoirForm.nota||"",clienteId:eoirForm.clienteId||existente.clienteId||"",clienteNombre:cliente?cliente.nombre:(existente.clienteNombre||""),updatedAt:ahora,revisadoAt:ahora,revisadoPor:por,natCode:eoirForm.natCode||existente.natCode||"",alertasActivas:eoirForm.alertasActivas!==undefined?eoirForm.alertasActivas:(existente.alertasActivas||false)};
         // Registrar en historial SIEMPRE que se guarda, aunque el estatus no cambie
-        if(estatusFinal){cambios.estatus=estatusFinal;cambios.historial=[...(existente.historial||[]),{estatus:estatusFinal,fecha:ahora,por,corte:eoirForm.corte||"",juez:eoirForm.juez||""}];}
+        if(estatusFinal){cambios.estatus=estatusFinal;cambios.historial=[...(existente.historial||[]),{estatus:estatusFinal,fecha:ahora,por,corte:eoirForm.corte||"",juez:eoirForm.juez||"",fechaAudiencia:eoirForm.fechaAudiencia||""}];}
         if(eoirForm.fechaAudiencia)cambios.fechaAudiencia=eoirForm.fechaAudiencia;
         await updateDoc(doc(db,"casos_eoir",existente.id),cambios);
       }else{
-        await addDoc(collection(db,"casos_eoir"),{officeId,alienNum,estatus:estatusFinal,corte:eoirForm.corte||"",juez:eoirForm.juez||"",nota:eoirForm.nota||"",fechaAudiencia:eoirForm.fechaAudiencia||"",natCode:eoirForm.natCode||"",alertasActivas:eoirForm.alertasActivas||false,clienteId:eoirForm.clienteId||"",clienteNombre:cliente?cliente.nombre:"",historial:[{estatus:estatusFinal,fecha:ahora,por,corte:eoirForm.corte||"",juez:eoirForm.juez||""}],createdAt:ahora,updatedAt:ahora,revisadoAt:ahora,revisadoPor:por});
+        await addDoc(collection(db,"casos_eoir"),{officeId,alienNum,estatus:estatusFinal,corte:eoirForm.corte||"",juez:eoirForm.juez||"",nota:eoirForm.nota||"",fechaAudiencia:eoirForm.fechaAudiencia||"",natCode:eoirForm.natCode||"",alertasActivas:eoirForm.alertasActivas||false,clienteId:eoirForm.clienteId||"",clienteNombre:cliente?cliente.nombre:"",historial:[{estatus:estatusFinal,fecha:ahora,por,corte:eoirForm.corte||"",juez:eoirForm.juez||"",fechaAudiencia:eoirForm.fechaAudiencia||""}],createdAt:ahora,updatedAt:ahora,revisadoAt:ahora,revisadoPor:por});
       }
       await loadCasosEoir();
       showToastFn(t("Caso EOIR guardado ✓","EOIR case saved ✓"));
@@ -2350,6 +2350,7 @@ const loadTeam=async()=>{
                                       <div style={{paddingBottom:12}}>
                                         <div style={{fontSize:13,fontWeight:i===0?700:500,color:"#0F172A"}}>{h.estatus}{i===0&&<span style={{background:"#F5F3FF",color:"#7C3AED",fontSize:9,fontWeight:700,padding:"1px 8px",borderRadius:99,marginLeft:6}}>{t("Más reciente","Most recent")}</span>}</div>
                                         {lang==="es"&&descEstatusEoir(h.estatus)&&<div style={{fontSize:11,color:"#64748B"}}>{descEstatusEoir(h.estatus)}</div>}
+                                        {h.fechaAudiencia&&<div style={{fontSize:11,color:"#7C3AED",fontWeight:600}}>📅 {h.fechaAudiencia}</div>}
                                         {h.corte&&<div style={{fontSize:11,color:"#94A3B8"}}>🏛️ {h.corte}{h.juez?` · ${h.juez}`:""}</div>}
                                         <div style={{fontSize:10,color:"#94A3B8"}}>{h.fecha?new Date(h.fecha).toLocaleString():""}</div>
                                       </div>
@@ -6427,3 +6428,5 @@ window.descargarI589PDFBorrador = function(cliente) {
 </script>
 </body>
 </html>
+
+  
