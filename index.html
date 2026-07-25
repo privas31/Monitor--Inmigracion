@@ -2365,41 +2365,72 @@ const loadTeam=async()=>{
                                 <div style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:12,padding:14}}>
                                   <div style={{fontSize:13,fontWeight:700,color:"#0F172A",marginBottom:10}}>⚡ {t("Acciones rápidas","Quick actions")}</div>
                                   <button onClick={()=>{setEoirForm({alienNum:caso.alienNum||"",estatus:ESTATUS_EOIR.some(s=>s.en===caso.estatus)?caso.estatus:"__otro__",estatusOtro:ESTATUS_EOIR.some(s=>s.en===caso.estatus)?"":caso.estatus,nota:caso.nota||"",clienteId:caso.clienteId||"",corte:caso.corte||"",juez:caso.juez||"",fechaAudiencia:caso.fechaAudiencia||"",natCode:caso.natCode||"",alertasActivas:caso.alertasActivas||false});setShowEOIR(true);}} style={{width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:600,cursor:"pointer",marginBottom:6,textAlign:"left"}}>💾 {t("Guardar seguimiento","Save tracking")}</button>
-                                  <button onClick={async()=>{
-                                    const alien=(caso.alienNum||"").replace(/\D/g,"");
-                                    const nat=caso.natCode||"";
-                                    if(!alien){alert(t("Este caso no tiene A-Number registrado","This case has no A-Number on file"));return;}
-                                    if(!nat){alert(t("Este caso no tiene Nacionalidad registrada. Agrégala en Guardar seguimiento.","This case has no Nationality. Add it in Save tracking."));return;}
-                                    const btn=document.activeElement;
-                                    if(btn){btn.textContent="⏳ Consultando...";btn.disabled=true;}
-                                    try{
-                                      const r=await fetch(`https://jobpath-ai-backend.onrender.com/acis/${alien}?country=${nat}`);
-                                      const data=await r.json();
-                                      if(!data.ok){
-                                        alert(data.error?.includes("CAPTCHA")||data.status===401?t("ACIS requiere verificación en este momento. Intenta más tarde.","ACIS requires verification right now. Try later."):t(`Error: ${data.error||"No se pudo consultar ACIS"}`,`Error: ${data.error||"Could not query ACIS"}`));
-                                        if(btn){btn.textContent="🔄 Verificar ACIS";btn.disabled=false;}return;
-                                      }
-                                      const msg=[`📋 Datos ACIS — A-${alien}:`,``,`Estatus: ${data.estatus}`,data.fechaAudiencia?`Audiencia: ${data.fechaAudiencia} ${data.horaAudiencia}`:`Sin audiencia programada`,data.corte?`Corte: ${data.corte}`:"",data.juez?`Juez: ${data.juez}`:"",data.clockStatus?`Reloj: ${data.clockStatus} (${data.diasReloj} días)`:"",``,t("¿Guardar estos datos?","Save this data?")].filter(Boolean).join("\n");
-                                      if(window.confirm(msg)){
-                                        const{db,doc,updateDoc}=window._firebase;
-                                        const ahora=new Date().toISOString();
-                                        const upd={updatedAt:ahora,ultimoChequeoAuto:ahora};
-                                        if(data.estatus)upd.estatus=data.estatus;
-                                        if(data.fechaAudiencia)upd.fechaAudiencia=data.fechaAudiencia;
-                                        if(data.corte)upd.corte=data.corte;
-                                        if(data.juez)upd.juez=data.juez;
-                                        if(data.direccionCorte)upd.direccionCorte=data.direccionCorte;
-                                        if(data.clockStatus)upd.clockStatus=data.clockStatus;
-                                        if(data.diasReloj)upd.diasReloj=data.diasReloj;
-                                        const hist=[...(caso.historial||[])];
-                                        if(data.estatus&&data.estatus!==caso.estatus)hist.push({estatus:data.estatus,fecha:ahora,por:"Sistema (verificación ACIS)",corte:data.corte||"",juez:data.juez||""});
-                                        if(hist.length>(caso.historial?.length||0))upd.historial=hist;
-                                        await updateDoc(doc(db,"casos_eoir",caso.id),upd);
-                                        if(typeof loadCasosEoir==="function")loadCasosEoir();
-                                        alert(t("✅ Datos actualizados","✅ Data updated"));
-                                      }
-                                    }catch(e){alert(t("No se pudo conectar. Intenta de nuevo.","Could not connect. Try again."));}
-                                    if(btn){btn.textContent="🔄 Verificar ACIS";btn.disabled=false;}
+                                  <button onClick={()=>{
+                                    const alien=(caso.alienNum||"").replace(/\D/g,"").padStart(9,"0");
+                                    const nat=caso.natCode||caso.paisOrigen||"";
+                                    if(!alien||alien==="000000000"){alert(t("Este caso no tiene A-Number registrado","This case has no A-Number on file"));return;}
+                                    // Abrir ACIS con A-Number pre-cargado
+                                    const acisUrl=`https://acis.eoir.justice.gov/en/`;
+                                    const win=window.open(acisUrl,"_blank");
+                                    // Mostrar modal para capturar resultado
+                                    setTimeout(()=>{
+                                      const overlay=document.createElement("div");
+                                      overlay.id="acis-modal-overlay";
+                                      overlay.style.cssText="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;";
+                                      overlay.innerHTML=`
+                                        <div style="background:#fff;border-radius:16px;padding:24px;width:440px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+                                          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                                            <div style="font-size:15px;font-weight:700;color:#0F172A;">📋 Resultado ACIS — A-${alien}</div>
+                                            <button onclick="document.getElementById('acis-modal-overlay').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94A3B8;">✕</button>
+                                          </div>
+                                          <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#1D4ED8;">
+                                            💡 Ingresa A-Number <strong>${alien}</strong>${nat?" y selecciona <strong>"+nat+"</strong> como nacionalidad":""} en la pestaña de ACIS que se abrió. Luego pega el resultado aquí.
+                                          </div>
+                                          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+                                            <div>
+                                              <label style="display:block;font-size:11px;font-weight:600;color:#374151;margin-bottom:4px;text-transform:uppercase;">Estatus ACIS</label>
+                                              <input id="acis-estatus" placeholder="Ej. Master Calendar Hearing..." style="width:100%;padding:8px 10px;border:1px solid #D1D5DB;border-radius:6px;font-size:12px;outline:none;box-sizing:border-box;"/>
+                                            </div>
+                                            <div>
+                                              <label style="display:block;font-size:11px;font-weight:600;color:#374151;margin-bottom:4px;text-transform:uppercase;">Fecha audiencia</label>
+                                              <input id="acis-fecha" type="date" style="width:100%;padding:8px 10px;border:1px solid #D1D5DB;border-radius:6px;font-size:12px;outline:none;box-sizing:border-box;"/>
+                                            </div>
+                                            <div>
+                                              <label style="display:block;font-size:11px;font-weight:600;color:#374151;margin-bottom:4px;text-transform:uppercase;">Corte</label>
+                                              <input id="acis-corte" placeholder="Ej. Miami FL" style="width:100%;padding:8px 10px;border:1px solid #D1D5DB;border-radius:6px;font-size:12px;outline:none;box-sizing:border-box;"/>
+                                            </div>
+                                            <div>
+                                              <label style="display:block;font-size:11px;font-weight:600;color:#374151;margin-bottom:4px;text-transform:uppercase;">Juez</label>
+                                              <input id="acis-juez" placeholder="Ej. Alexander, Scott G." style="width:100%;padding:8px 10px;border:1px solid #D1D5DB;border-radius:6px;font-size:12px;outline:none;box-sizing:border-box;"/>
+                                            </div>
+                                          </div>
+                                          <button id="acis-guardar-btn" style="width:100%;background:#1D9E75;color:#fff;border:none;border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;">✅ Guardar en historial EOIR</button>
+                                        </div>`;
+                                      document.body.appendChild(overlay);
+                                      document.getElementById("acis-guardar-btn").onclick=async()=>{
+                                        const estatus=document.getElementById("acis-estatus").value.trim();
+                                        const fecha=document.getElementById("acis-fecha").value.trim();
+                                        const corte=document.getElementById("acis-corte").value.trim();
+                                        const juez=document.getElementById("acis-juez").value.trim();
+                                        if(!estatus){alert("Ingresa al menos el estatus del caso");return;}
+                                        try{
+                                          const{db,doc,updateDoc}=window._firebase;
+                                          const ahora=new Date().toISOString();
+                                          const upd={updatedAt:ahora,ultimoChequeoAcis:ahora};
+                                          if(estatus)upd.estatus=estatus;
+                                          if(fecha)upd.fechaAudiencia=fecha;
+                                          if(corte)upd.corte=corte;
+                                          if(juez)upd.juez=juez;
+                                          const hist=[...(caso.historial||[])];
+                                          if(estatus&&estatus!==caso.estatus)hist.push({estatus,fecha:ahora,por:"Verificación ACIS manual",corte:corte||caso.corte||"",juez:juez||caso.juez||""});
+                                          if(hist.length>(caso.historial?.length||0))upd.historial=hist;
+                                          await updateDoc(doc(db,"casos_eoir",caso.id),upd);
+                                          if(typeof loadCasosEoir==="function")loadCasosEoir();
+                                          document.getElementById("acis-modal-overlay").remove();
+                                          showToastFn("✅ Datos ACIS guardados en historial");
+                                        }catch(e){alert("Error guardando: "+e.message);}
+                                      };
+                                    },500);
                                   }} style={{width:"100%",background:"#EEF2FF",border:"1px solid #C7D2FE",borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:700,cursor:"pointer",marginBottom:6,textAlign:"left",color:"#3730A3"}}>🔄 {t("Verificar ACIS","Check ACIS")}</button>
                                   <button onClick={()=>window.open("https://acis.eoir.justice.gov/en/caseInformation","_blank")} style={{width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:600,cursor:"pointer",marginBottom:10,textAlign:"left"}}>🔗 {t("Abrir en EOIR","Open on EOIR")}</button>
                                   <div style={{background:"#F5F3FF",border:"1px solid #DDD6FE",borderRadius:8,padding:"10px 12px",fontSize:11,color:"#7C3AED",lineHeight:1.5}}>ℹ️ {t("Historial EOIR registrado manualmente desde el portal de cortes de inmigración.","EOIR history manually logged from the immigration court portal.")}</div>
