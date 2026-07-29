@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2.5 ead-reloj-d3d4 -->
+<!DOCTYPE html><!-- v2.6 ead-vencimiento-header -->
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
@@ -2659,6 +2659,10 @@ const loadTeam=async()=>{
                                       <i className="ti ti-id-badge" style={{fontSize:15,color:"#64748B"}}></i>
                                       <span style={{fontSize:12,fontWeight:600,color:"#64748B",textTransform:"uppercase",letterSpacing:"0.05em"}}>Permiso de Trabajo (EAD)</span>
                                     </div>
+                                    <div style={{textAlign:"center"}}>
+                                      <div style={{fontSize:11,color:"#94A3B8",fontWeight:500}}>Vencimiento</div>
+                                      <div style={{fontSize:18,fontWeight:800,color:"#0F172A",letterSpacing:"-0.5px"}}>{fmt(ca.eadVence)}</div>
+                                    </div>
                                     <div style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:20,background:eadColorL,color:eadColorT}}>{eadBadge}</div>
                                   </div>
                                   {/* Cuerpo: semáforo + contenido */}
@@ -2679,10 +2683,7 @@ const loadTeam=async()=>{
                                           <div style={{fontSize:34,fontWeight:900,color:"#0F172A",lineHeight:1,letterSpacing:"-1px"}}>{esAplicar?"Aplicar":vencido?`${Math.abs(diasEAD)} días`:`${diasEAD} días`}</div>
                                           {eadDesg&&<div style={{fontSize:11,color:"#94A3B8",marginTop:2}}>{eadDesg}</div>}
                                         </div>
-                                        <div style={{textAlign:"right"}}>
-                                          <div style={{fontSize:10,color:"#94A3B8"}}>Vencimiento</div>
-                                          <div style={{fontSize:13,fontWeight:700,color:"#0F172A"}}>{fmt(ca.eadVence)}</div>
-                                        </div>
+
                                       </div>
                                       {/* Barra timeline */}
                                       {!esAplicar&&<div style={{height:7,background:"#F1F5F9",borderRadius:4,overflow:"hidden",marginBottom:6}}>
@@ -2690,10 +2691,22 @@ const loadTeam=async()=>{
                                       </div>}
                                       {/* Etiquetas */}
                                       {!esAplicar&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
-                                        <span style={{fontSize:9,color:"#94A3B8"}}>Hoy <span style={{color:"#22C55E"}}>●</span></span>
-                                        <span style={{fontSize:9,color:"#F59E0B",fontWeight:600}}>↑ Renovar (6m)</span>
-                                        <span style={{fontSize:9,color:"#EF4444",fontWeight:600}}>↑ Urgente (3m)</span>
-                                        <span style={{fontSize:9,color:"#64748B"}}>Vence <span style={{color:"#EF4444"}}>●</span></span>
+                                        <div style={{textAlign:"left"}}>
+                                          <div style={{fontSize:12,fontWeight:600,color:"#64748B"}}>Hoy</div>
+                                          <div style={{fontSize:10,color:"#22C55E"}}>●</div>
+                                        </div>
+                                        <div style={{textAlign:"center"}}>
+                                          <div style={{fontSize:12,fontWeight:600,color:"#F59E0B"}}>Renovar</div>
+                                          <div style={{fontSize:10,color:"#F59E0B"}}>↑ 6 meses</div>
+                                        </div>
+                                        <div style={{textAlign:"center"}}>
+                                          <div style={{fontSize:12,fontWeight:600,color:"#EF4444"}}>Urgente</div>
+                                          <div style={{fontSize:10,color:"#EF4444"}}>↑ 3 meses</div>
+                                        </div>
+                                        <div style={{textAlign:"right"}}>
+                                          <div style={{fontSize:12,fontWeight:600,color:"#64748B"}}>Vence</div>
+                                          <div style={{fontSize:10,color:"#EF4444"}}>●</div>
+                                        </div>
                                       </div>}
                                       {/* Cajita mensaje */}
                                       <div style={{padding:"9px 13px",borderRadius:9,background:eadColorL,border:`1px solid ${eadBorder}`,fontSize:12,fontWeight:500,color:eadColorT,display:"flex",alignItems:"center",gap:8}}>
