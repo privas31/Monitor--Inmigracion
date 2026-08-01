@@ -2060,9 +2060,7 @@ const loadTeam=async()=>{
         </div>
       ):(
         <div style={{display:"grid",gap:24}}>
-          {(busquedaActiva.trim()
-            ? clientes.filter(c=>c.nombre.toLowerCase().includes(busquedaActiva.trim().toLowerCase())||(c.alienNum||"").toLowerCase().includes(busquedaActiva.trim().toLowerCase()))
-            : filtered
+          {(filtered
           ).map(c=>{
             const st=getStatusCliente(c);const scfg=STATUS_CONFIG[st];const pf=getPróximaFecha(c);const dias=pf?getDias(pf):null;const exp=expandedId===c.id;
             const totalP=(c.casos||[]).reduce((s,ca)=>s+getTotalProcesos(ca.procesos||[]),0);
