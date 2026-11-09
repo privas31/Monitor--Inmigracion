@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Portal del Cliente — I-589</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:'Segoe UI',Inter,sans-serif;background:#F1F5F9;color:#1E293B}
+header{background:#1E3A5F;color:#fff;padding:18px 20px}header h1{margin:0;font-size:18px}header p{margin:4px 0 0;font-size:13px;color:#A8C4E0}
+main{max-width:720px;margin:0 auto;padding:16px}
+section{background:#fff;border-radius:12px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+h2{font-size:15px;margin:0 0 12px;color:#1E3A5F}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:560px){.g{grid-template-columns:1fr}}
+label{display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:3px}
+input,select,textarea{width:100%;padding:9px;border:1px solid #CBD5E1;border-radius:8px;font-size:14px;font-family:inherit}
+textarea{min-height:110px}.full{grid-column:1/-1}
+.chk{display:flex;gap:8px;align-items:center;font-size:14px;margin:6px 0}.chk input{width:auto}
+button{background:#2563EB;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-size:15px;font-weight:600;cursor:pointer;margin-right:8px}
+button.sec{background:#64748B}#msg{margin:10px 0;font-size:14px;font-weight:600}
+.ok{color:#059669}.err{color:#DC2626}.note{font-size:12px;color:#64748B}
+</style>
+</head>
+<body>
+<header><h1>⚖️ Solicitud de Asilo (I-589) — Su información</h1><p id="who">Cargando…</p></header>
+<main id="app" style="display:none">
+<p class="note">Llene todo lo que pueda en español. Puede guardar y volver después con este mismo link. Su información solo la ve nuestra oficina.</p>
+<form id="f" onsubmit="return false">
+<section><h2>👤 Datos personales</h2><div class="g">
+<div><label>Apellido(s)</label><input name="apellido"></div>
+<div><label>Nombre(s)</label><input name="nombre"></div>
+<div><label>Segundo nombre</label><input name="middle"></div>
+<div><label>Otros nombres usados (alias)</label><input name="alias"></div>
+<div><label>Número A (si tiene)</label><input name="alien"></div>
+<div><label>Teléfono</label><input name="telefono" type="tel"></div>
+<div><label>Sexo</label><select name="sexo"><option value="">—</option><option value="M">Masculino</option><option value="F">Femenino</option></select></div>
+<div><label>Estado civil</label><select name="estado-civil"><option value="">—</option><option value="Single">Soltero/a</option><option value="Married">Casado/a</option><option value="Divorced">Divorciado/a</option><option value="Widowed">Viudo/a</option></select></div>
+<div><label>Fecha de nacimiento (mm/dd/aaaa)</label><input name="dob" placeholder="01/31/1990"></div>
+<div><label>Ciudad de nacimiento</label><input name="ciudad-nac"></div>
+<div><label>País de nacimiento</label><input name="pais-nac"></div>
+<div><label>Nacionalidad actual</label><input name="nacionalidad"></div>
+<div><label>Raza / etnia / tribu</label><input name="raza"></div>
+<div><label>Religión</label><input name="religion"></div>
+<div><label>Idioma nativo</label><input name="idioma"></div>
+<div><label>Otros idiomas</label><input name="otros-idiomas"></div>
+</div></section>
+
+<section><h2>🏠 Dirección actual en EE. UU.</h2><div class="g">
+<div class="full"><label>Calle y número</label><input name="dir-calle"></div>
+<div><label>Apto / Unidad</label><input name="dir-apt"></div>
+<div><label>Ciudad</label><input name="dir-ciudad"></div>
+<div><label>Estado</label><input name="dir-estado" maxlength="2" placeholder="FL"></div>
+<div><label>ZIP</label><input name="dir-zip"></div>
+</div></section>
+
+<section><h2>✈️ Entrada a EE. UU.</h2><div class="g">
+<div><label>Fecha de última salida de su país</label><input name="fecha-salida" placeholder="mm/dd/aaaa"></div>
+<div><label>Número I-94 (si tiene)</label><input name="i94"></div>
+<div><label>Número de pasaporte</label><input name="pasaporte"></div>
+<div><label>País que emitió el pasaporte</label><input name="pais-pasaporte"></div>
+<div><label>Vencimiento del pasaporte</label><input name="pasaporte-vence" placeholder="mm/dd/aaaa"></div>
+</div></section>
+
+<section><h2>👨‍👩‍👧 Familia</h2><div class="g">
+<div><label>¿Tiene cónyuge?</label><select name="tiene-conyuge"><option value="">—</option><option>Sí</option><option>No</option></select></div>
+<div><label>¿Tiene hijos?</label><select name="tiene-hijos"><option value="">—</option><option>Sí</option><option>No</option></select></div>
+<div class="full"><label>Cónyuge e hijos: nombre completo, fecha de nacimiento, país y si están en EE. UU. (uno por línea)</label><textarea name="hijos"></textarea></div>
+<div><label>Nombre de la madre</label><input name="madre-nombre"></div>
+<div><label>¿Dónde vive? (o fallecida)</label><input name="madre-ubicacion"></div>
+<div><label>Nombre del padre</label><input name="padre-nombre"></div>
+<div><label>¿Dónde vive? (o fallecido)</label><input name="padre-ubicacion"></div>
+<div class="full"><label>Hermanos/as: nombre y dónde viven (uno por línea)</label><textarea name="hermanos"></textarea></div>
+</div></section>
+
+<section><h2>📍 Historial</h2><div class="g">
+<div class="full"><label>Direcciones donde vivió en los últimos 5 años (fecha desde-hasta, dirección, país; una por línea)</label><textarea name="residencias"></textarea></div>
+<div class="full"><label>Educación (escuela, lugar, fechas; una por línea)</label><textarea name="educacion"></textarea></div>
+<div class="full"><label>Empleos de los últimos 5 años (empresa, lugar, fechas; uno por línea)</label><textarea name="empleos"></textarea></div>
+</div></section>
+
+<section><h2>🛡️ ¿Por qué teme regresar? (marque lo que aplique)</h2>
+<label class="chk"><input type="checkbox" name="base-raza" value="Sí">Raza</label>
+<label class="chk"><input type="checkbox" name="base-religion" value="Sí">Religión</label>
+<label class="chk"><input type="checkbox" name="base-nacionalidad" value="Sí">Nacionalidad</label>
+<label class="chk"><input type="checkbox" name="base-opinion" value="Sí">Opinión política</label>
+<label class="chk"><input type="checkbox" name="base-grupo" value="Sí">Pertenencia a un grupo social particular</label>
+<label class="chk"><input type="checkbox" name="base-tortura" value="Sí">Tortura (Convención contra la Tortura)</label>
+<div style="margin-top:10px"><label>Cuente con sus palabras qué le pasó, cuándo, quién lo hizo y por qué</label><textarea name="q1" style="min-height:200px"></textarea></div>
+<div style="margin-top:10px"><label>¿Qué cree que le pasaría si regresa a su país?</label><textarea name="q2"></textarea></div>
+</section>
+
+<div id="msg"></div>
+<button id="save">Guardar avance</button><button id="send" class="sec">Enviar a la oficina</button>
+</form>
+</main>
+<p id="fatal" class="err" style="text-align:center;padding:30px;display:none"></p>
+
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {getFirestore,doc,getDoc,updateDoc} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+const app=initializeApp({apiKey:"AIzaSyCJRqzvnfcFPYoDC-eTDSEZtMcj_7mJPtM",authDomain:"immigration-monitor.firebaseapp.com",projectId:"immigration-monitor",storageBucket:"immigration-monitor.firebasestorage.app",messagingSenderId:"696902129948",appId:"1:696902129948:web:95fa87711cf0880862c2d9"});
+const db=getFirestore(app);
+const id=new URLSearchParams(location.search).get("id");
+const $=s=>document.querySelector(s),f=$("#f");
+const fatal=t=>{$("#fatal").textContent=t;$("#fatal").style.display="block";$("#who").textContent="";};
+const msg=(t,c)=>{$("#msg").textContent=t;$("#msg").className=c};
+if(!id){fatal("Link inválido. Pida un link nuevo a su oficina.");}
+else{
+  const ref=doc(db,"clientes",id);
+  try{
+    const s=await getDoc(ref);
+    if(!s.exists()){fatal("No encontramos este expediente. Pida un link nuevo a su oficina.");}
+    else{
+      const c=s.data();$("#who").textContent="Hola, "+(c.nombre||"cliente");
+      const d=c.i589Draft||{};
+      for(const el of f.elements){if(!el.name)continue;const v=d[el.name]??((el.name==="telefono")?c.telefono:undefined);
+        if(v===undefined)continue;if(el.type==="checkbox")el.checked=!!v;else el.value=v;}
+      if(d.status==="aprobado"){msg("Su información ya fue aprobada por la oficina.","ok");}
+      $("#app").style.display="block";
+    }
+  }catch(e){console.error(e);fatal("No se pudo abrir el expediente. Avise a su oficina.");}
+  const collect=()=>{const o={};for(const el of f.elements){if(!el.name)continue;
+    if(el.type==="checkbox"){if(el.checked)o[el.name]=el.value;}else if(el.value.trim())o[el.name]=el.value.trim();}return o;};
+  const guardar=async(final)=>{
+    try{msg("Guardando…");
+      await updateDoc(ref,{i589Draft:{...collect(),status:final?"pendiente_revision":"borrador_cliente",savedAt:new Date().toISOString(),fuente:"portal_cliente"}});
+      msg(final?"✅ Enviado. Nuestra oficina revisará su información.":"✅ Avance guardado.","ok");
+    }catch(e){console.error(e);msg("No se pudo guardar. Intente de nuevo.","err");}};
+  $("#save").onclick=()=>guardar(false);$("#send").onclick=()=>guardar(true);
+}
+</script>
+</body>
+</html>
