@@ -2162,7 +2162,7 @@ const loadTeam=async()=>{
                               <span style={{marginLeft:"auto",fontSize:10,color:"#94A3B8",fontStyle:"italic"}}>pronto</span>
                             </button>
                           )}
-                          <button onClick={e=>{e.stopPropagation();const link=window.location.origin+"/portal-cliente.html?id="+c.id;navigator.clipboard.writeText(link).then(()=>showToastFn("Link copiado ✓")).catch(()=>{prompt("Copia este link:",link);});setOpenMenuId(null);}} style={{width:"100%",padding:"10px 14px",background:"none",border:"none",textAlign:"left",fontSize:13,color:"#374151",cursor:"pointer",display:"flex",alignItems:"center",gap:10}} onMouseEnter={e=>e.target.style.background="#F8FAFC"} onMouseLeave={e=>e.target.style.background="none"}>
+                          <button onClick={e=>{e.stopPropagation();const link="https://privas31.github.io/Monitor--Inmigracion/portal-cliente.html?id="+c.id;navigator.clipboard.writeText(link).then(()=>showToastFn("Link copiado ✓")).catch(()=>{prompt("Copia este link:",link);});setOpenMenuId(null);}} style={{width:"100%",padding:"10px 14px",background:"none",border:"none",textAlign:"left",fontSize:13,color:"#374151",cursor:"pointer",display:"flex",alignItems:"center",gap:10}} onMouseEnter={e=>e.target.style.background="#F8FAFC"} onMouseLeave={e=>e.target.style.background="none"}>
                             <span>🔗</span> Copiar link del portal
                           </button>
                           <button onClick={e=>{
