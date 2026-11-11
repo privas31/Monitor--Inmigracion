@@ -1235,7 +1235,7 @@ const loadTeam=async()=>{
 
   // ── FORMA ASILO NEW ─────────────────────────────────────────────────────────
   const ASILO_META=["tipoFormulario","labelFormulario","estado","fechaEnvio","fuente","officeId","clienteId","procesadoEn","procesadoPor","_secciones","notificado","notificadoEn"];
-  const asiloLink=(()=>{try{return new URL("asilo.html",window.location.href).href;}catch(e){return "asilo.html";}})();
+  const asiloLink="https://asilo.immigpath.com";
   const loadAsilo=async()=>{
     setAsiloLoading(true);
     try{
