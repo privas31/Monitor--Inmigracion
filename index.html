@@ -18,6 +18,7 @@
   </script>
   <script src="https://unpkg.com/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -439,6 +440,15 @@ function App(){
   const[jotformEditData,setJotformEditData]=useState(null);
   const[jotformTab,setJotformTab]=useState("nuevas"); // "nuevas" | "revisadas"
   const[jotformPendientes,setJotformPendientes]=useState(0);
+  // ── Forma Asilo New + Reporte de Asilo ──
+  const[showReportesMenu,setShowReportesMenu]=useState(false);
+  const[showReporteAsilo,setShowReporteAsilo]=useState(false);
+  const[raBusq,setRaBusq]=useState("");const[raPais,setRaPais]=useState("");
+  const[raDesde,setRaDesde]=useState("");const[raHasta,setRaHasta]=useState("");
+  const[showAsiloNew,setShowAsiloNew]=useState(false);
+  const[asiloSubs,setAsiloSubs]=useState([]);const[asiloLoading,setAsiloLoading]=useState(false);
+  const[asiloTab,setAsiloTab]=useState("pendientes");const[asiloAbierto,setAsiloAbierto]=useState(null);
+  const[asiloVincular,setAsiloVincular]=useState("");
 
   const[showPagosConfig,setShowPagosConfig]=useState(false);
   const[showCobrar,setShowCobrar]=useState(false);
@@ -516,7 +526,7 @@ function App(){
     });
   },[]);
 
-  useEffect(()=>{if(!user||!officeData)return;loadCases();loadTeam();loadBorradores();loadPagosConfig();loadSolicitudesServicio();loadAlertasEoir();},[user,officeData]);
+  useEffect(()=>{if(!user||!officeData)return;loadCases();loadTeam();loadBorradores();loadAsilo();loadPagosConfig();loadSolicitudesServicio();loadAlertasEoir();},[user,officeData]);
   useEffect(()=>{ window._officeData = officeData; window._userData = userData; },[officeData, userData]);
 
   // Heartbeat: actualizar "última actividad" cada 2 minutos mientras el usuario está activo
@@ -1189,7 +1199,7 @@ const loadTeam=async()=>{
       const snap=await getDocs(q);
       const officeId2=officeData?.id||userData?.officeId;
       // Solo mostrar formularios de esta oficina (con officeId correcto)
-      const all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(b=>!b.officeId||b.officeId===officeId2);
+      const all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(b=>(!b.officeId||b.officeId===officeId2)&&b.tipoFormulario!=="ASILO");
       setBorradores(all);
       setBorradoresPendientes(all.filter(b=>b.estado==="borrador"||!b.estado).length);
     }catch(e){
@@ -1197,7 +1207,7 @@ const loadTeam=async()=>{
         const{db,collection,getDocs}=window._firebase;
         const snap=await getDocs(collection(db,"borradores"));
         const officeId3=officeData?.id||userData?.officeId;
-        const all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(b=>!b.officeId||b.officeId===officeId3);
+        const all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(b=>(!b.officeId||b.officeId===officeId3)&&b.tipoFormulario!=="ASILO");
         setBorradores(all);setBorradoresPendientes(all.filter(b=>b.estado==="borrador"||!b.estado).length);
       }catch(e2){}
     }
@@ -1222,6 +1232,57 @@ const loadTeam=async()=>{
       loadCases();showToastFn("✅ Cliente activado desde formulario");setShowBorradores(false);
     }catch(e){showToastFn("Error al activar","error");}
   };
+
+  // ── FORMA ASILO NEW ─────────────────────────────────────────────────────────
+  const ASILO_META=["tipoFormulario","labelFormulario","estado","fechaEnvio","fuente","officeId","clienteId","procesadoEn","procesadoPor","_secciones"];
+  const asiloLink=(()=>{try{return new URL("asilo.html",window.location.href).href;}catch(e){return "asilo.html";}})();
+  const loadAsilo=async()=>{
+    setAsiloLoading(true);
+    try{
+      const{db,collection,getDocs,query,where}=window._firebase;
+      const snap=await getDocs(query(collection(db,"borradores"),where("tipoFormulario","==","ASILO")));
+      const all=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.fechaEnvio||"").localeCompare(a.fechaEnvio||""));
+      setAsiloSubs(all);
+    }catch(e){console.error("loadAsilo:",e);}
+    setAsiloLoading(false);
+  };
+  const asiloRespuestas=(b)=>{const r={};Object.entries(b).forEach(([k,v])=>{if(k!=="id"&&!ASILO_META.includes(k))r[k]=v;});return r;};
+  const marcarAsiloProcesado=async(b,clienteId)=>{
+    const{db,doc,updateDoc}=window._firebase;
+    const extra={estado:"procesado",clienteId,procesadoEn:new Date().toISOString(),procesadoPor:user.email};
+    await updateDoc(doc(db,"borradores",b.id),extra);
+    setAsiloSubs(prev=>prev.map(x=>x.id===b.id?{...x,...extra}:x));
+  };
+  const activarAsilo=async(b)=>{
+    try{
+      const{db,collection,addDoc}=window._firebase;
+      const officeId=officeData?.id||userData?.officeId||"";
+      const ref=await addDoc(collection(db,"clientes"),{
+        nombre:b.nombre||"",paisOrigen:b.paisOrigen||"",alienNum:b.alienNum||"",
+        telefono:b.telefono||"",email:b.email||"",encargada:"",officeId,
+        casos:[{...emptyCaso,sistema:"uscis",tipoCaso:"I-589 Asilo",alienNum:b.alienNum||""}],
+        formAsilo:{fechaEnvio:b.fechaEnvio||"",borradorId:b.id,respuestas:asiloRespuestas(b)},
+        nota:`Forma de Asilo recibida el ${b.fechaEnvio?new Date(b.fechaEnvio).toLocaleDateString("es-MX"):"—"}.`,
+        createdAt:new Date().toISOString(),createdBy:user.email,fromIntake:true
+      });
+      await marcarAsiloProcesado(b,ref.id);
+      loadCases();showToastFn("✅ Cliente creado desde la Forma de Asilo");
+    }catch(e){console.error(e);showToastFn("Error al crear el cliente","error");}
+  };
+  const vincularAsilo=async(b,clienteId)=>{
+    if(!clienteId)return;
+    try{
+      const{db,doc,updateDoc}=window._firebase;
+      await updateDoc(doc(db,"clientes",clienteId),{formAsilo:{fechaEnvio:b.fechaEnvio||"",borradorId:b.id,respuestas:asiloRespuestas(b)},updatedAt:new Date().toISOString(),updatedBy:user.email});
+      await marcarAsiloProcesado(b,clienteId);
+      setAsiloVincular("");loadCases();showToastFn("✅ Forma de Asilo vinculada al cliente");
+    }catch(e){console.error(e);showToastFn("Error al vincular","error");}
+  };
+  const eliminarAsilo=async(b)=>{
+    if(!window.confirm(`¿Eliminar la Forma de Asilo de ${b.nombre||"este cliente"}? Esta acción no se puede deshacer.`))return;
+    try{const{db,doc,deleteDoc}=window._firebase;await deleteDoc(doc(db,"borradores",b.id));setAsiloSubs(prev=>prev.filter(x=>x.id!==b.id));setAsiloAbierto(null);showToastFn("Forma eliminada");}catch(e){showToastFn("Error al eliminar","error");}
+  };
+  const asiloPendientes=asiloSubs.filter(b=>b.estado!=="procesado").length;
 
   const rechazarBorrador=async(id)=>{
     try{const{db,doc,deleteDoc}=window._firebase;await deleteDoc(doc(db,"borradores",id));setBorradores(prev=>prev.filter(x=>x.id!==id));setBorradoresPendientes(prev=>Math.max(0,prev-1));showToastFn("Borrador eliminado");}catch(e){showToastFn("Error","error");}
@@ -1855,8 +1916,9 @@ const loadTeam=async()=>{
     {id:"pagos",     label:t("Pagos","Payments"),                  icon:"ti-credit-card", show:isAdmin, onClick:()=>setShowPagosReporte(true)},
     {id:"equipo",    label:t("Equipo","Team"),                     icon:"ti-users", show:isAdmin, onClick:()=>{setShowTeam(true);loadOfficeUsers();}},
     {id:"usuarios",  label:t("Usuarios","Users"),                  icon:"ti-lock", show:isAdmin, onClick:()=>setShowAddUser(true)},
-    {id:"reportes",  label:t("Reportes","Reports"),                icon:"ti-chart-line", show:isAdmin, onClick:()=>setShowPDF(true)},
+    {id:"reportes",  label:t("Reportes","Reports"),                icon:"ti-chart-line", show:isAdmin, onClick:()=>setShowReportesMenu(true)},
     {id:"jotform",  label:"Jotform — Asilo", icon:"ti-download", badge:jotformPendientes||null, onClick:()=>{setShowJotform(true);loadJotformSubs();}},
+    {id:"asilonew", label:"Forma Asilo New", icon:"ti-file-certificate", badge:asiloPendientes||null, onClick:()=>{setShowAsiloNew(true);loadAsilo();}},
     {id:"sec-herramientas", section:t("Herramientas","Tools")},
     {id:"uscis",     label:t("Verificador USCIS","USCIS Checker")+(uscisHabilitado?"":" 🔒"), icon:"ti-search", onClick:()=>{setShowUSCIS(true);if(uscisHabilitado)loadCasosUscis();}},
     {id:"envios",    label:t("Control de envíos","Shipments")+(enviosHabilitado?"":" 🔒"), icon:"ti-package", onClick:()=>{setShowEnvios(true);if(enviosHabilitado)loadEnvios();}},
@@ -2893,6 +2955,10 @@ const loadTeam=async()=>{
               <label style={{display:"block",fontSize:12,fontWeight:600,color:"#374151",marginBottom:3,textTransform:"uppercase"}}>Notas generales</label>
               <textarea value={formCliente.nota} onChange={e=>setFormCliente(p=>({...p,nota:e.target.value}))} placeholder={t("Observaciones del cliente...","Client notes...")} rows={2} style={{width:"100%",padding:"8px 11px",borderRadius:7,border:"1px solid #D1D5DB",fontSize:14,resize:"vertical",outline:"none"}}/>
             </div>
+            <div>
+              <label style={{display:"block",fontSize:12,fontWeight:600,color:"#374151",marginBottom:3,textTransform:"uppercase"}}>{t("Otros","Other")}</label>
+              <textarea value={formCliente.otros||""} onChange={e=>setFormCliente(p=>({...p,otros:e.target.value}))} placeholder={t("Otros datos (sale en el Reporte de Asilo)...","Other info (shown in the Asylum Report)...")} rows={2} style={{width:"100%",padding:"8px 11px",borderRadius:7,border:"1px solid #D1D5DB",fontSize:14,resize:"vertical",outline:"none"}}/>
+            </div>
           </div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
             <div style={{fontSize:13,fontWeight:700,color:"#0F172A"}}>{ t("Casos del cliente","Client cases") }</div>
@@ -3902,6 +3968,200 @@ const loadTeam=async()=>{
         </div>
       </div>
     )}
+
+    {/* ── MENÚ DE REPORTES ───────────────────────────────────────────────── */}
+    {showReportesMenu&&(
+      <div onClick={()=>setShowReportesMenu(false)} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.6)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+        <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:520,padding:24,boxShadow:"0 24px 80px rgba(0,0,0,0.3)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <h2 style={{margin:0,fontSize:18,fontWeight:800,color:"#0F172A"}}>📊 {t("Reportes","Reports")}</h2>
+            <button onClick={()=>setShowReportesMenu(false)} style={{background:"#F1F5F9",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:14}}>✕</button>
+          </div>
+          <div style={{display:"grid",gap:12}}>
+            <button onClick={()=>{setShowReportesMenu(false);setShowPDF(true);}} style={{textAlign:"left",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:12,padding:16,cursor:"pointer"}}>
+              <div style={{fontSize:15,fontWeight:700,color:"#1E3A5F"}}>📄 {t("Reporte general de clientes","General client report")}</div>
+              <div style={{fontSize:12,color:"#64748B",marginTop:4}}>{t("El reporte en PDF que ya usas.","The PDF report you already use.")}</div>
+            </button>
+            <button onClick={()=>{setShowReportesMenu(false);setShowReporteAsilo(true);}} style={{textAlign:"left",background:"#F5F3FF",border:"1px solid #DDD6FE",borderRadius:12,padding:16,cursor:"pointer"}}>
+              <div style={{fontSize:15,fontWeight:700,color:"#6D28D9"}}>⚖️ {t("Reporte de Asilo","Asylum report")}</div>
+              <div style={{fontSize:12,color:"#64748B",marginTop:4}}>{t("Nombre, correo, número A, país, recibo de asilo (USCIS), fecha de corte (EOIR) y Otros. Exporta a Excel.","Name, email, A#, country, asylum receipt (USCIS), court date (EOIR) and Other. Exports to Excel.")}</div>
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── REPORTE DE ASILO (EXCEL) ───────────────────────────────────────── */}
+    {showReporteAsilo&&(()=>{
+      const esAsiloUscis=ca=>ca.sistema==="uscis"&&/589|asilo/i.test(ca.tipoCaso||"");
+      const fmtF=f=>{if(!f)return "";const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(f);return m?`${m[2]}/${m[3]}/${m[1]}`:f;};
+      const todas=clientes.filter(c=>(c.casos||[]).some(esAsiloUscis)).map(c=>{
+        const casos=c.casos||[];
+        const us=casos.find(esAsiloUscis)||{};
+        const eoirs=casos.filter(ca=>ca.sistema==="eoir"&&ca.fechaCorte);
+        const eo=eoirs.find(ca=>/asilo/i.test(ca.tipoCaso||""))||eoirs[0]||{};
+        return{id:c.id,nombre:c.nombre||"",email:c.email||"",alien:c.alienNum||us.alienNum||eo.alienNum||"",
+          pais:c.paisOrigen||"",recibo:us.receiptNum||"",fechaCorte:eo.fechaCorte||"",otros:c.otros||""};
+      });
+      const paises=[...new Set(todas.map(r=>r.pais).filter(Boolean))].sort();
+      const filas=todas.filter(r=>{
+        if(raBusq){const q=raBusq.toLowerCase();if(!(`${r.nombre} ${r.alien} ${r.recibo} ${r.email}`.toLowerCase().includes(q)))return false;}
+        if(raPais&&r.pais!==raPais)return false;
+        if(raDesde&&(!r.fechaCorte||r.fechaCorte<raDesde))return false;
+        if(raHasta&&(!r.fechaCorte||r.fechaCorte>raHasta))return false;
+        return true;
+      }).sort((a,b)=>{
+        if(a.fechaCorte&&b.fechaCorte)return a.fechaCorte.localeCompare(b.fechaCorte);
+        if(a.fechaCorte)return -1;if(b.fechaCorte)return 1;return a.nombre.localeCompare(b.nombre);
+      });
+      const exportarExcel=()=>{
+        if(!window.XLSX){showToastFn("No se pudo cargar Excel, recarga la página","error");return;}
+        const data=filas.map(r=>{
+          const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(r.fechaCorte);
+          return{"Nombre del cliente":r.nombre,"Correo electrónico":r.email,"Número A (Alien)":r.alien,"País de origen":r.pais,
+            "Número de recibo (Asilo USCIS)":r.recibo,"Fecha de corte (EOIR)":m?new Date(+m[1],+m[2]-1,+m[3]):r.fechaCorte,"Otros":r.otros};
+        });
+        const ws=window.XLSX.utils.json_to_sheet(data,{cellDates:true,dateNF:"mm/dd/yyyy"});
+        ws["!cols"]=[{wch:30},{wch:30},{wch:16},{wch:18},{wch:26},{wch:18},{wch:40}];
+        const wb=window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb,ws,"Reporte de Asilo");
+        window.XLSX.writeFile(wb,"reporte-asilo-"+new Date().toISOString().slice(0,10)+".xlsx");
+        showToastFn("Excel: "+filas.length+" clientes");
+      };
+      const inp={padding:"8px 10px",borderRadius:8,border:"1px solid #D1D5DB",fontSize:13,background:"#fff"};
+      return(
+      <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.75)",zIndex:200,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 12px",overflowY:"auto"}}>
+        <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:1150,boxShadow:"0 24px 80px rgba(0,0,0,0.35)",overflow:"hidden"}}>
+          <div style={{background:"linear-gradient(135deg,#4C1D95 0%,#6D28D9 100%)",padding:"20px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+            <div>
+              <div style={{fontSize:20,fontWeight:800,color:"#fff"}}>⚖️ {t("Reporte de Asilo","Asylum report")}</div>
+              <div style={{fontSize:12,color:"#DDD6FE",marginTop:4}}>{filas.length} {t("de","of")} {todas.length} {t("clientes con asilo en USCIS","clients with USCIS asylum")}</div>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={exportarExcel} disabled={filas.length===0} style={{background:"#16A34A",border:"none",borderRadius:8,color:"#fff",padding:"9px 16px",cursor:filas.length?"pointer":"not-allowed",fontSize:13,fontWeight:700,opacity:filas.length?1:0.5}}>⬇️ {t("Exportar a Excel","Export to Excel")}</button>
+              <button onClick={()=>setShowReporteAsilo(false)} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:8,color:"#fff",padding:"9px 14px",cursor:"pointer",fontSize:13}}>✕ {t("Cerrar","Close")}</button>
+            </div>
+          </div>
+          <div style={{padding:"14px 24px",display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end",borderBottom:"1px solid #E2E8F0",background:"#F8FAFC"}}>
+            <div style={{flex:"1 1 200px"}}><div style={{fontSize:11,fontWeight:600,color:"#64748B",marginBottom:3}}>{t("BUSCAR","SEARCH")}</div>
+              <input value={raBusq} onChange={e=>setRaBusq(e.target.value)} placeholder={t("Nombre, número A, recibo...","Name, A#, receipt...")} style={{...inp,width:"100%"}}/></div>
+            <div><div style={{fontSize:11,fontWeight:600,color:"#64748B",marginBottom:3}}>{t("PAÍS","COUNTRY")}</div>
+              <select value={raPais} onChange={e=>setRaPais(e.target.value)} style={inp}><option value="">{t("Todos","All")}</option>{paises.map(p=><option key={p} value={p}>{p}</option>)}</select></div>
+            <div><div style={{fontSize:11,fontWeight:600,color:"#64748B",marginBottom:3}}>{t("CORTE DESDE","COURT FROM")}</div>
+              <input type="date" value={raDesde} onChange={e=>setRaDesde(e.target.value)} style={inp}/></div>
+            <div><div style={{fontSize:11,fontWeight:600,color:"#64748B",marginBottom:3}}>{t("CORTE HASTA","COURT TO")}</div>
+              <input type="date" value={raHasta} onChange={e=>setRaHasta(e.target.value)} style={inp}/></div>
+            {(raBusq||raPais||raDesde||raHasta)&&<button onClick={()=>{setRaBusq("");setRaPais("");setRaDesde("");setRaHasta("");}} style={{...inp,cursor:"pointer",color:"#6D28D9",fontWeight:600}}>{t("Limpiar filtros","Clear filters")}</button>}
+          </div>
+          <div style={{overflowX:"auto",padding:"0 0 8px"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead><tr style={{background:"#F1F5F9",color:"#334155",textAlign:"left"}}>
+                {["Nombre del cliente","Correo electrónico","Número A","País de origen","Recibo (Asilo USCIS)","Fecha de corte (EOIR)","Otros"].map(h=><th key={h} style={{padding:"10px 12px",fontSize:11,fontWeight:700,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {filas.length===0&&<tr><td colSpan={7} style={{padding:30,textAlign:"center",color:"#94A3B8"}}>{t("No hay clientes que coincidan.","No matching clients.")}</td></tr>}
+                {filas.map((r,i)=>(
+                  <tr key={r.id} style={{borderTop:"1px solid #E2E8F0",background:i%2?"#FAFAFB":"#fff"}}>
+                    <td style={{padding:"9px 12px",fontWeight:700,color:"#1E3A5F"}}>{r.nombre||"—"}</td>
+                    <td style={{padding:"9px 12px"}}>{r.email||"—"}</td>
+                    <td style={{padding:"9px 12px",fontFamily:"monospace"}}>{r.alien||"—"}</td>
+                    <td style={{padding:"9px 12px"}}>{r.pais||"—"}</td>
+                    <td style={{padding:"9px 12px",fontFamily:"monospace"}}>{r.recibo||"—"}</td>
+                    <td style={{padding:"9px 12px",whiteSpace:"nowrap"}}>{fmtF(r.fechaCorte)||"—"}</td>
+                    <td style={{padding:"9px 12px",maxWidth:260,whiteSpace:"pre-wrap"}}>{r.otros||"—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>);
+    })()}
+
+    {/* ── FORMA ASILO NEW ────────────────────────────────────────────────── */}
+    {showAsiloNew&&(()=>{
+      const lista=asiloSubs.filter(b=>asiloTab==="pendientes"?b.estado!=="procesado":b.estado==="procesado");
+      const msgWA=`Hola, por favor llene su formulario de asilo desde su teléfono en este enlace: ${asiloLink}`;
+      const etiqueta=k=>k.replace(/_/g," ").replace(/([a-z])([A-Z])/g,"$1 $2").replace(/^./,m=>m.toUpperCase());
+      const valor=v=>Array.isArray(v)?(v.length?v.map(x=>typeof x==="object"?Object.values(x).filter(Boolean).join(" · "):x).join("\n"):"—"):(typeof v==="object"&&v!==null?Object.entries(v).map(([a,b])=>`${a}: ${b}`).join("\n"):(v===true?"Sí":v===false?"No":(v||"—")));
+      return(
+      <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.75)",zIndex:200,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 12px",overflowY:"auto"}}>
+        <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:1000,boxShadow:"0 24px 80px rgba(0,0,0,0.35)",overflow:"hidden"}}>
+          <div style={{background:"linear-gradient(135deg,#0F172A 0%,#1E3A6E 100%)",padding:"20px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+            <div style={{fontSize:20,fontWeight:800,color:"#fff",display:"flex",alignItems:"center",gap:10}}>
+              🛡️ Forma Asilo New
+              {asiloPendientes>0&&<span style={{background:"#EF4444",color:"#fff",borderRadius:20,padding:"2px 9px",fontSize:12,fontWeight:700}}>{asiloPendientes} nueva(s)</span>}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={loadAsilo} disabled={asiloLoading} style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,color:"#fff",padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>{asiloLoading?"⏳ Cargando...":"🔄 Actualizar"}</button>
+              <button onClick={()=>{setShowAsiloNew(false);setAsiloAbierto(null);}} style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,color:"#fff",padding:"7px 14px",cursor:"pointer",fontSize:12}}>✕ Cerrar</button>
+            </div>
+          </div>
+
+          {/* Link para enviar */}
+          <div style={{padding:"16px 24px",background:"#F0FDF4",borderBottom:"1px solid #BBF7D0"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#166534",marginBottom:6}}>LINK DEL FORMULARIO (el mismo para todos los clientes)</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <input readOnly value={asiloLink} onFocus={e=>e.target.select()} style={{flex:"1 1 280px",padding:"9px 12px",borderRadius:8,border:"1px solid #86EFAC",fontSize:13,fontFamily:"monospace",background:"#fff"}}/>
+              <button onClick={()=>{navigator.clipboard?.writeText(asiloLink).then(()=>showToastFn("Link copiado")).catch(()=>showToastFn("No se pudo copiar","error"));}} style={{background:"#fff",border:"1px solid #86EFAC",borderRadius:8,padding:"9px 14px",cursor:"pointer",fontSize:13,fontWeight:600,color:"#166534"}}>📋 Copiar</button>
+              <a href={"https://wa.me/?text="+encodeURIComponent(msgWA)} target="_blank" rel="noopener noreferrer" style={{background:"#25D366",borderRadius:8,padding:"9px 14px",fontSize:13,fontWeight:700,color:"#fff",textDecoration:"none"}}>💬 Enviar por WhatsApp</a>
+            </div>
+          </div>
+
+          <div style={{display:"flex",gap:6,padding:"12px 24px 0"}}>
+            {[["pendientes","Nuevas"],["procesadas","Procesadas"]].map(([k,l])=>(
+              <button key={k} onClick={()=>{setAsiloTab(k);setAsiloAbierto(null);}} style={{padding:"8px 16px",borderRadius:"8px 8px 0 0",border:"1px solid #E2E8F0",borderBottom:asiloTab===k?"2px solid #2563EB":"1px solid #E2E8F0",background:asiloTab===k?"#EFF6FF":"#fff",fontWeight:700,fontSize:13,cursor:"pointer",color:asiloTab===k?"#1D4ED8":"#64748B"}}>
+                {l} ({asiloSubs.filter(b=>k==="pendientes"?b.estado!=="procesado":b.estado==="procesado").length})
+              </button>
+            ))}
+          </div>
+
+          <div style={{padding:"12px 24px 24px"}}>
+            {lista.length===0&&<div style={{padding:36,textAlign:"center",color:"#94A3B8",fontSize:14}}>{asiloLoading?"Cargando...":(asiloTab==="pendientes"?"No hay formas nuevas.":"No hay formas procesadas.")}</div>}
+            {lista.map(b=>{
+              const abierto=asiloAbierto===b.id;
+              const cli=b.clienteId?clientes.find(c=>c.id===b.clienteId):null;
+              return(
+              <div key={b.id} style={{border:"1px solid #E2E8F0",borderRadius:12,marginBottom:10,overflow:"hidden"}}>
+                <div onClick={()=>{setAsiloAbierto(abierto?null:b.id);setAsiloVincular("");}} style={{padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,cursor:"pointer",background:abierto?"#F8FAFC":"#fff"}}>
+                  <div>
+                    <div style={{fontWeight:700,color:"#1E3A5F",fontSize:15}}>{b.nombre||"(Sin nombre)"}</div>
+                    <div style={{fontSize:12,color:"#64748B",marginTop:2}}>
+                      {b.paisOrigen||"—"} · A# {b.alienNum||"—"} · {b.telefono||"—"} · Recibido {b.fechaEnvio?new Date(b.fechaEnvio).toLocaleString("es-MX"):"—"}
+                      {cli&&<> · Cliente: <b>{cli.nombre}</b></>}
+                    </div>
+                  </div>
+                  <span style={{fontSize:13,color:"#2563EB",fontWeight:600,whiteSpace:"nowrap"}}>{abierto?"▲ Cerrar":"▼ Ver respuestas"}</span>
+                </div>
+                {abierto&&(
+                  <div style={{padding:"4px 16px 16px",borderTop:"1px solid #E2E8F0"}}>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:"8px 18px",margin:"12px 0"}}>
+                      {Object.entries(asiloRespuestas(b)).map(([k,v])=>(
+                        <div key={k} style={{borderBottom:"1px dashed #E2E8F0",paddingBottom:6}}>
+                          <div style={{fontSize:11,fontWeight:700,color:"#64748B",textTransform:"uppercase"}}>{etiqueta(k)}</div>
+                          <div style={{fontSize:14,color:"#0F172A",whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{valor(v)}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",paddingTop:8,borderTop:"1px solid #F1F5F9"}}>
+                      {b.estado!=="procesado"&&<>
+                        <button onClick={()=>activarAsilo(b)} style={{background:"#2563EB",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontWeight:700,fontSize:13,cursor:"pointer"}}>➕ Crear cliente nuevo</button>
+                        <select value={asiloVincular} onChange={e=>setAsiloVincular(e.target.value)} style={{padding:"8px 10px",borderRadius:8,border:"1px solid #D1D5DB",fontSize:13,maxWidth:260}}>
+                          <option value="">Vincular a cliente existente...</option>
+                          {[...clientes].sort((a,c)=>(a.nombre||"").localeCompare(c.nombre||"")).map(c=><option key={c.id} value={c.id}>{c.nombre}{c.alienNum?` — A# ${c.alienNum}`:""}</option>)}
+                        </select>
+                        <button onClick={()=>vincularAsilo(b,asiloVincular)} disabled={!asiloVincular} style={{background:asiloVincular?"#0F766E":"#CBD5E1",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontWeight:700,fontSize:13,cursor:asiloVincular?"pointer":"not-allowed"}}>🔗 Vincular</button>
+                      </>}
+                      <button onClick={()=>eliminarAsilo(b)} style={{marginLeft:"auto",background:"#FEF2F2",color:"#DC2626",border:"1px solid #FECACA",borderRadius:8,padding:"8px 14px",fontWeight:600,fontSize:13,cursor:"pointer"}}>🗑 Eliminar</button>
+                    </div>
+                  </div>
+                )}
+              </div>);
+            })}
+          </div>
+        </div>
+      </div>);
+    })()}
 
     {showPDF&&(()=>{
       const pdfClientes=clientes.filter(c=>{
