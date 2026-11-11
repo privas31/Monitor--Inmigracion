@@ -237,13 +237,13 @@ const SISTEMAS = {
 const FOIA_ESTADOS = ["Enviado","En proceso","Respuesta recibida","Cerrado"];
 const PROCESOS_COMUNES = ["Asilo (I-589)","Permiso de trabajo (I-765)","Ajuste de estatus (I-485)","Peticion familiar (I-130)","Advance Parole (I-131)","Naturalizacion (N-400)","Renovar Green Card (I-90)","Cancelación de deportación","FOIA","Consultoria","Otro"];
 function getStatusConfig(){return{
-  vencido:{label:t("Vencida","Overdue"),color:"#DC2626",bg:"#FEF2F2",border:"#FECACA",icon:"🔴"},
-  hoy:{label:t("Hoy","Today"),color:"#EA580C",bg:"#FFF7ED",border:"#FED7AA",icon:"🟠"},
-  urgente:{label:t("Urgente","Urgent"),color:"#D97706",bg:"#FFFBEB",border:"#FDE68A",icon:"🟡"},
+  vencido:{label:t("Fecha pasada","Past date"),color:"#64748B",bg:"#F1F5F9",border:"#E2E8F0",icon:"⚪"},
+  hoy:{label:t("Hoy","Today"),color:"#DC2626",bg:"#FEF2F2",border:"#FECACA",icon:"🔴"},
+  urgente:{label:t("Urgente","Urgent"),color:"#DC2626",bg:"#FEF2F2",border:"#FECACA",icon:"🔴"},
   proximo:{label:t("Próxima","Upcoming"),color:"#2563EB",bg:"#EFF6FF",border:"#BFDBFE",icon:"🔵"},
   ok:{label:t("Al día","On Track"),color:"#16A34A",bg:"#F0FDF4",border:"#BBF7D0",icon:"🟢"},
   deportado:{label:t("Deportado/Removido","Deported/Removed"),color:"#DC2626",bg:"#FEE2E2",border:"#FECACA",icon:"🚫"},
-  pendiente:{label:t("Pendiente","Pending"),color:"#6B7280",bg:"#F9FAFB",border:"#E5E7EB",icon:"⚪"},
+  pendiente:{label:t("Sin fecha","No date"),color:"#94A3B8",bg:"#F9FAFB",border:"#E5E7EB",icon:"⚪"},
 };}
 const STATUS_CONFIG = getStatusConfig();
 
@@ -1233,7 +1233,7 @@ const loadTeam=async()=>{
       const snap=await getDocs(q);
       const officeId2=officeData?.id||userData?.officeId;
       // Solo mostrar formularios de esta oficina (con officeId correcto)
-      const all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(b=>(!b.officeId||b.officeId===officeId2)&&!["ASILO","PERMISO","FOIA"].includes(b.tipoFormulario));
+      const all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(b=>(!b.officeId||b.officeId===officeId2)&&!["ASILO","PERMISO","FOIA","DIRECCION"].includes(b.tipoFormulario));
       setBorradores(all);
       setBorradoresPendientes(all.filter(b=>b.estado==="borrador"||!b.estado).length);
     }catch(e){
@@ -1241,7 +1241,7 @@ const loadTeam=async()=>{
         const{db,collection,getDocs}=window._firebase;
         const snap=await getDocs(collection(db,"borradores"));
         const officeId3=officeData?.id||userData?.officeId;
-        const all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(b=>(!b.officeId||b.officeId===officeId3)&&!["ASILO","PERMISO","FOIA"].includes(b.tipoFormulario));
+        const all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(b=>(!b.officeId||b.officeId===officeId3)&&!["ASILO","PERMISO","FOIA","DIRECCION"].includes(b.tipoFormulario));
         setBorradores(all);setBorradoresPendientes(all.filter(b=>b.estado==="borrador"||!b.estado).length);
       }catch(e2){}
     }
@@ -1273,6 +1273,7 @@ const loadTeam=async()=>{
     ASILO:{titulo:"Formulario de Asilo (I-589)",icono:"🛡️",link:"https://asilo.immigpath.com",caso:"I-589 Asilo",campo:"formAsilo",wa:"su formulario de asilo"},
     PERMISO:{titulo:"Permiso de Trabajo (I-765)",icono:"💼",link:"https://formularios.immigpath.com/permiso",caso:"I-765 Permiso de trabajo",campo:"formPermiso",wa:"su formulario de permiso de trabajo"},
     FOIA:{titulo:"F.O.I.A",icono:"📂",link:"https://formularios.immigpath.com/foia",sistema:"foia",caso:"FOIA - Expediente migratorio",campo:"formFoia",wa:"su formulario de FOIA"},
+    DIRECCION:{titulo:"Cambio de Dirección (AR-11)",icono:"🏠",link:"https://formularios.immigpath.com/direccion",caso:"AR-11 Cambio de dirección",campo:"formDireccion",wa:"el formulario de cambio de dirección"},
   };
   const formCfg=FORMS_LINK[formTipo]||FORMS_LINK.ASILO;
   const asiloLink=formCfg.link;
@@ -1384,7 +1385,7 @@ const loadTeam=async()=>{
     showToastFn("📄 PDF descargado");
   };
   const pendientesDe=tipo=>asiloSubs.filter(b=>(b.tipoFormulario||"ASILO")===tipo&&b.estado!=="procesado").length;
-  const asiloPendientes=pendientesDe("ASILO");const permisoPendientes=pendientesDe("PERMISO");const foiaPendientes=pendientesDe("FOIA");
+  const asiloPendientes=pendientesDe("ASILO");const permisoPendientes=pendientesDe("PERMISO");const foiaPendientes=pendientesDe("FOIA");const dirPendientes=pendientesDe("DIRECCION");
 
   const rechazarBorrador=async(id)=>{
     try{const{db,doc,deleteDoc}=window._firebase;await deleteDoc(doc(db,"borradores",id));setBorradores(prev=>prev.filter(x=>x.id!==id));setBorradoresPendientes(prev=>Math.max(0,prev-1));showToastFn("Borrador eliminado");}catch(e){showToastFn("Error","error");}
@@ -2251,7 +2252,7 @@ const loadTeam=async()=>{
       </div>);
   };
 
-  const formsNuevos=borradoresPendientes+asiloPendientes+permisoPendientes+foiaPendientes;
+  const formsNuevos=borradoresPendientes+asiloPendientes+permisoPendientes+foiaPendientes+dirPendientes;
   const navItems = [
     {id:"sec-principal", section:t("Principal","Main")},
     {id:"inicio",    label:t("Inicio","Home"),        icon:"ti-home", onClick:()=>{}},
@@ -2265,6 +2266,7 @@ const loadTeam=async()=>{
       {id:"f-asilo", label:t("Asilo (I-589)","Asylum (I-589)"), badge:asiloPendientes||null, onClick:()=>{setFormTipo("ASILO");setAsiloAbierto(null);setShowAsiloNew(true);loadAsilo();}},
       {id:"f-permiso", label:t("Permiso de trabajo (I-765)","Work permit (I-765)"), badge:permisoPendientes||null, onClick:()=>{setFormTipo("PERMISO");setAsiloAbierto(null);setShowAsiloNew(true);loadAsilo();}},
       {id:"f-foia", label:"F.O.I.A", badge:foiaPendientes||null, onClick:()=>{setFormTipo("FOIA");setAsiloAbierto(null);setShowAsiloNew(true);loadAsilo();}},
+      {id:"f-direccion", label:t("Cambio de dirección","Change of address"), badge:dirPendientes||null, onClick:()=>{setFormTipo("DIRECCION");setAsiloAbierto(null);setShowAsiloNew(true);loadAsilo();}},
       ...[["I-485",t("Ajuste de estatus (I-485)","Adjustment (I-485)")],["I-130",t("Petición familiar (I-130)","Family petition (I-130)")]].map(([tipo,label])=>(
         {id:"f-"+tipo, label, badge:borradores.filter(b=>b.tipoFormulario===tipo&&(b.estado==="borrador"||!b.estado)).length||null, onClick:()=>{setBorradoresFiltro(tipo);setShowBorradores(true);loadBorradores();}})),
       {id:"f-todos", label:t("Ver todos","View all"), badge:null, onClick:()=>{setBorradoresFiltro("");setShowBorradores(true);loadBorradores();}},
@@ -2565,7 +2567,7 @@ const loadTeam=async()=>{
                   <div style={{textAlign:"center",minWidth:150,flexShrink:0,paddingLeft:24,borderLeft:"1px solid #E2E8F0",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
                     <div style={{fontSize:11,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4,fontWeight:600}}>{t("Próxima Fecha","Next Date")}</div>
                     <div style={{fontWeight:700,color:pf?scfg.color:"#CBD5E1",fontSize:22,letterSpacing:"-0.02em",lineHeight:1.2}}>{pf?fmt(pf):"—"}</div>
-                    {dias!==null&&<div style={{fontSize:13,color:"#64748B",marginTop:2,marginBottom:14}}>{dias<0?(lang==="es"?`Hace ${Math.abs(dias)} días`:`${Math.abs(dias)}d ago`):dias===0?t("HOY!","TODAY!"):(lang==="es"?`En ${dias} días`:`In ${dias}d`)}</div>}
+                    {dias!==null&&<div style={{fontSize:13,color:"#64748B",marginTop:2,marginBottom:14}}>{dias<0?(lang==="es"?`Hace ${Math.abs(dias)} días`:`${Math.abs(dias)}d ago`):dias===0?t("HOY!","TODAY!"):dias===1?t("Mañana","Tomorrow"):(lang==="es"?`En ${dias} días`:`In ${dias}d`)}</div>}
                     <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}} onClick={e=>e.stopPropagation()}>
                     <button onClick={e=>{e.stopPropagation();abrirFechaRapida(c);}} style={{background:"#fff",color:"#6D28D9",border:"1px solid #E2E8F0",borderRadius:9,width:38,height:38,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} title={t("Editar fecha","Edit date")}><i className="ti ti-calendar"></i></button>
                     <button onClick={e=>{e.stopPropagation();openEdit(c);}} style={{background:"#fff",color:"#6D28D9",border:"1px solid #E2E8F0",borderRadius:9,width:38,height:38,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} title="Editar"><i className="ti ti-edit"></i></button>
@@ -4604,6 +4606,9 @@ const loadTeam=async()=>{
             </div>
           </div>
 
+          {formTipo==="DIRECCION"&&<div style={{margin:"12px 24px 0",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"10px 14px",fontSize:12.5,color:"#334155",lineHeight:1.5}}>
+            📌 {t("Recuerda: USCIS pide el AR-11 dentro de 10 días de la mudanza, y la corte pide el EOIR-33 dentro de 5 días. Actualiza también la dirección en cada caso pendiente.","Reminder: USCIS requires the AR-11 within 10 days of moving, and the court requires the EOIR-33 within 5 days. Also update the address on each pending case.")}
+          </div>}
           <div style={{display:"flex",gap:6,padding:"12px 24px 0"}}>
             {[["pendientes","Nuevas"],["procesadas","Procesadas"]].map(([k,l])=>(
               <button key={k} onClick={()=>{setAsiloTab(k);setAsiloAbierto(null);}} style={{padding:"8px 16px",borderRadius:"8px 8px 0 0",border:"1px solid #E2E8F0",borderBottom:asiloTab===k?"2px solid #2563EB":"1px solid #E2E8F0",background:asiloTab===k?"#EFF6FF":"#fff",fontWeight:700,fontSize:13,cursor:"pointer",color:asiloTab===k?"#1D4ED8":"#64748B"}}>
