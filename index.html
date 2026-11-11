@@ -1233,7 +1233,7 @@ const loadTeam=async()=>{
       const snap=await getDocs(q);
       const officeId2=officeData?.id||userData?.officeId;
       // Solo mostrar formularios de esta oficina (con officeId correcto)
-      const all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(b=>(!b.officeId||b.officeId===officeId2)&&!["ASILO","PERMISO","FOIA","DIRECCION"].includes(b.tipoFormulario));
+      const all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(b=>(!b.officeId||b.officeId===officeId2)&&!["ASILO","PERMISO","FOIA","DIRECCION","RENOVACION"].includes(b.tipoFormulario));
       setBorradores(all);
       setBorradoresPendientes(all.filter(b=>b.estado==="borrador"||!b.estado).length);
     }catch(e){
@@ -1241,7 +1241,7 @@ const loadTeam=async()=>{
         const{db,collection,getDocs}=window._firebase;
         const snap=await getDocs(collection(db,"borradores"));
         const officeId3=officeData?.id||userData?.officeId;
-        const all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(b=>(!b.officeId||b.officeId===officeId3)&&!["ASILO","PERMISO","FOIA","DIRECCION"].includes(b.tipoFormulario));
+        const all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(b=>(!b.officeId||b.officeId===officeId3)&&!["ASILO","PERMISO","FOIA","DIRECCION","RENOVACION"].includes(b.tipoFormulario));
         setBorradores(all);setBorradoresPendientes(all.filter(b=>b.estado==="borrador"||!b.estado).length);
       }catch(e2){}
     }
@@ -1268,12 +1268,13 @@ const loadTeam=async()=>{
   };
 
   // ── FORMA ASILO NEW ─────────────────────────────────────────────────────────
-  const ASILO_META=["tipoFormulario","labelFormulario","estado","fechaEnvio","fuente","officeId","clienteId","procesadoEn","procesadoPor","_secciones","notificado","notificadoEn"];
+  const ASILO_META=["fotos","tipoFormulario","labelFormulario","estado","fechaEnvio","fuente","officeId","clienteId","procesadoEn","procesadoPor","_secciones","notificado","notificadoEn"];
   const FORMS_LINK={
     ASILO:{titulo:"Formulario de Asilo (I-589)",icono:"🛡️",link:"https://asilo.immigpath.com",caso:"I-589 Asilo",campo:"formAsilo",wa:"su formulario de asilo"},
     PERMISO:{titulo:"Permiso de Trabajo (I-765)",icono:"💼",link:"https://formularios.immigpath.com/permiso",caso:"I-765 Permiso de trabajo",campo:"formPermiso",wa:"su formulario de permiso de trabajo"},
     FOIA:{titulo:"F.O.I.A",icono:"📂",link:"https://formularios.immigpath.com/foia",sistema:"foia",caso:"FOIA - Expediente migratorio",campo:"formFoia",wa:"su formulario de FOIA"},
     DIRECCION:{titulo:"Cambio de Dirección (AR-11)",icono:"🏠",link:"https://formularios.immigpath.com/direccion",caso:"AR-11 Cambio de dirección",campo:"formDireccion",wa:"el formulario de cambio de dirección"},
+    RENOVACION:{titulo:"Renovación de Permiso (I-765)",icono:"🔄",link:"https://formularios.immigpath.com/renovacion",caso:"I-765 Permiso de trabajo",campo:"formRenovacion",wa:"el formulario para renovar su permiso de trabajo"},
   };
   const formCfg=FORMS_LINK[formTipo]||FORMS_LINK.ASILO;
   const asiloLink=formCfg.link;
@@ -1301,7 +1302,7 @@ const loadTeam=async()=>{
       const ref=await addDoc(collection(db,"clientes"),{
         nombre:b.nombre||"",paisOrigen:b.paisOrigen||"",alienNum:b.alienNum||"",
         telefono:b.telefono||"",email:b.email||"",encargada:"",officeId,
-        casos:[{...emptyCaso,sistema:(FORMS_LINK[b.tipoFormulario]||FORMS_LINK.ASILO).sistema||"uscis",tipoCaso:(FORMS_LINK[b.tipoFormulario]||FORMS_LINK.ASILO).caso,alienNum:b.alienNum||""}],
+        casos:[{...emptyCaso,sistema:(FORMS_LINK[b.tipoFormulario]||FORMS_LINK.ASILO).sistema||"uscis",tipoCaso:(FORMS_LINK[b.tipoFormulario]||FORMS_LINK.ASILO).caso,alienNum:b.alienNum||"",...(b.tipoFormulario==="RENOVACION"&&b.datos?.eadVence?{tieneEAD:"si",eadVence:b.datos.eadVence,eadRenovado:"no",eadReceipt:b.datos.eadUscisNum||""}:{})}],
         [(FORMS_LINK[b.tipoFormulario]||FORMS_LINK.ASILO).campo]:{fechaEnvio:b.fechaEnvio||"",borradorId:b.id,respuestas:asiloRespuestas(b)},
         nota:`${(FORMS_LINK[b.tipoFormulario]||FORMS_LINK.ASILO).titulo} recibido el ${b.fechaEnvio?new Date(b.fechaEnvio).toLocaleDateString("es-MX"):"—"}.`,
         createdAt:new Date().toISOString(),createdBy:user.email,fromIntake:true
@@ -1368,6 +1369,17 @@ const loadTeam=async()=>{
       });
       y=pdf.lastAutoTable.finalY+6;
     });
+    // Fotos adicionales (ej. tarjeta EAD)
+    (b.fotos||[]).forEach(f=>{
+      try{
+        const p=pdf.getImageProperties(f.src);const w=Math.min(W-2*M,110),h=w*p.height/p.width;
+        if(y+h+14>H-16){pdf.addPage();y=18;}
+        pdf.setFont("helvetica","bold");pdf.setFontSize(9);pdf.setTextColor(30,58,95);pdf.text(tx(f.l).toUpperCase(),M,y+4);
+        pdf.setDrawColor(226,232,240);pdf.roundedRect(M,y+7,w+4,h+4,2,2,"S");
+        pdf.addImage(f.src,"JPEG",M+2,y+9,w,h,undefined,"FAST");
+        y+=h+18;
+      }catch(e){}
+    });
     // Firma
     if(b.firma){
       if(y>H-55){pdf.addPage();y=20;}
@@ -1385,7 +1397,7 @@ const loadTeam=async()=>{
     showToastFn("📄 PDF descargado");
   };
   const pendientesDe=tipo=>asiloSubs.filter(b=>(b.tipoFormulario||"ASILO")===tipo&&b.estado!=="procesado").length;
-  const asiloPendientes=pendientesDe("ASILO");const permisoPendientes=pendientesDe("PERMISO");const foiaPendientes=pendientesDe("FOIA");const dirPendientes=pendientesDe("DIRECCION");
+  const asiloPendientes=pendientesDe("ASILO");const permisoPendientes=pendientesDe("PERMISO");const foiaPendientes=pendientesDe("FOIA");const dirPendientes=pendientesDe("DIRECCION");const renPendientes=pendientesDe("RENOVACION");
 
   const rechazarBorrador=async(id)=>{
     try{const{db,doc,deleteDoc}=window._firebase;await deleteDoc(doc(db,"borradores",id));setBorradores(prev=>prev.filter(x=>x.id!==id));setBorradoresPendientes(prev=>Math.max(0,prev-1));showToastFn("Borrador eliminado");}catch(e){showToastFn("Error","error");}
@@ -2252,7 +2264,7 @@ const loadTeam=async()=>{
       </div>);
   };
 
-  const formsNuevos=borradoresPendientes+asiloPendientes+permisoPendientes+foiaPendientes+dirPendientes;
+  const formsNuevos=borradoresPendientes+asiloPendientes+permisoPendientes+foiaPendientes+dirPendientes+renPendientes;
   const navItems = [
     {id:"sec-principal", section:t("Principal","Main")},
     {id:"inicio",    label:t("Inicio","Home"),        icon:"ti-home", onClick:()=>{}},
@@ -2265,6 +2277,7 @@ const loadTeam=async()=>{
     {id:"formularios",label:t("Formularios","Forms"), icon:"ti-folder", badgeGris:formsNuevos||null, folder:true, children:[
       {id:"f-asilo", label:t("Asilo (I-589)","Asylum (I-589)"), badge:asiloPendientes||null, onClick:()=>{setFormTipo("ASILO");setAsiloAbierto(null);setShowAsiloNew(true);loadAsilo();}},
       {id:"f-permiso", label:t("Permiso de trabajo (I-765)","Work permit (I-765)"), badge:permisoPendientes||null, onClick:()=>{setFormTipo("PERMISO");setAsiloAbierto(null);setShowAsiloNew(true);loadAsilo();}},
+      {id:"f-renovacion", label:t("Renovación de permiso (I-765)","Work permit renewal (I-765)"), badge:renPendientes||null, onClick:()=>{setFormTipo("RENOVACION");setAsiloAbierto(null);setShowAsiloNew(true);loadAsilo();}},
       {id:"f-foia", label:"F.O.I.A", badge:foiaPendientes||null, onClick:()=>{setFormTipo("FOIA");setAsiloAbierto(null);setShowAsiloNew(true);loadAsilo();}},
       {id:"f-direccion", label:t("Cambio de dirección","Change of address"), badge:dirPendientes||null, onClick:()=>{setFormTipo("DIRECCION");setAsiloAbierto(null);setShowAsiloNew(true);loadAsilo();}},
       ...[["I-485",t("Ajuste de estatus (I-485)","Adjustment (I-485)")],["I-130",t("Petición familiar (I-130)","Family petition (I-130)")]].map(([tipo,label])=>(
@@ -4637,7 +4650,8 @@ const loadTeam=async()=>{
                 {abierto&&(
                   <div style={{padding:"4px 16px 16px",borderTop:"1px solid #E2E8F0"}}>
                     {b.secciones?(<div style={{margin:"12px 0"}}>
-                      {(b.foto||b.firma)&&<div style={{display:"flex",gap:16,flexWrap:"wrap",marginBottom:14}}>
+                      {(b.foto||b.firma||(b.fotos||[]).length>0)&&<div style={{display:"flex",gap:16,flexWrap:"wrap",marginBottom:14}}>
+                        {(b.fotos||[]).map((f,i)=><div key={i}><div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:4,maxWidth:240}}>{(f.l||"FOTO").toUpperCase()}</div><a href={f.src} download={`foto-${i+1}-${(b.nombre||"cliente").replace(/\s+/g,"-")}.jpg`}><img src={f.src} alt={f.l} style={{width:240,maxHeight:160,objectFit:"contain",background:"#F8FAFC",borderRadius:10,border:"1px solid #E2E8F0"}}/></a></div>)}
                         {b.foto&&<div><div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:4}}>FOTO</div><a href={b.foto} download={`foto-${(b.nombre||"cliente").replace(/\s+/g,"-")}.jpg`}><img src={b.foto} alt="Foto" style={{width:130,borderRadius:10,border:"1px solid #E2E8F0"}}/></a></div>}
                         {b.firma&&<div><div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:4}}>FIRMA</div><img src={b.firma} alt="Firma" style={{width:260,height:110,objectFit:"contain",background:"#fff",borderRadius:10,border:"1px solid #E2E8F0"}}/></div>}
                       </div>}
