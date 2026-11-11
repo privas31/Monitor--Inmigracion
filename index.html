@@ -1293,6 +1293,67 @@ const loadTeam=async()=>{
     if(!window.confirm(`¿Eliminar el formulario de ${b.nombre||"este cliente"}? Esta acción no se puede deshacer.`))return;
     try{const{db,doc,deleteDoc}=window._firebase;await deleteDoc(doc(db,"borradores",b.id));setAsiloSubs(prev=>prev.filter(x=>x.id!==b.id));setAsiloAbierto(null);showToastFn("Forma eliminada");}catch(e){showToastFn("Error al eliminar","error");}
   };
+  // ── PDF de un formulario recibido (Asilo, Permiso, FOIA) ──
+  const descargarFormPDF=(b)=>{
+    const jsPDF=(window.jspdf&&window.jspdf.jsPDF)?window.jspdf.jsPDF:window.jsPDF;
+    if(!jsPDF){showToastFn("Error cargando PDF. Recarga la página.","error");return;}
+    const cfg=FORMS_LINK[b.tipoFormulario]||FORMS_LINK.ASILO;
+    // Helvetica de jsPDF solo trae Latin-1: dejamos acentos y ñ, quitamos emojis y símbolos raros
+    const tx=v=>String(v==null?"":v).replace(/[\u2018\u2019]/g,"'").replace(/[\u201C\u201D]/g,'"').replace(/[\u2013\u2014]/g,"-").replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u00FF]/g,"").trim();
+    const pdf=new jsPDF({orientation:"portrait",unit:"mm",format:"letter"});
+    const W=pdf.internal.pageSize.getWidth(),H=pdf.internal.pageSize.getHeight(),M=14;
+    const oficina=tx(officeData?.name||"Mi Oficina");
+    const recibido=b.fechaEnvio?new Date(b.fechaEnvio).toLocaleString("es-US",{day:"numeric",month:"long",year:"numeric",hour:"numeric",minute:"2-digit"}):"-";
+    // Encabezado
+    pdf.setFillColor(30,58,95);pdf.rect(0,0,W,30,"F");
+    pdf.setTextColor(255,255,255);pdf.setFont("helvetica","bold");pdf.setFontSize(14);pdf.text(tx(cfg.titulo),M,12);
+    pdf.setFont("helvetica","normal");pdf.setFontSize(8.5);pdf.setTextColor(168,196,224);
+    pdf.text(oficina+"   |   Recibido: "+tx(recibido),M,19);
+    pdf.text("Generado: "+tx(new Date().toLocaleDateString("es-US",{day:"numeric",month:"long",year:"numeric"}))+"   |   "+tx(user.email),M,24.5);
+    pdf.setFillColor(44,76,116);pdf.setDrawColor(90,120,160);pdf.setLineWidth(0.2);pdf.roundedRect(W-M-28,8,28,7,1.5,1.5,"FD");
+    pdf.setTextColor(203,216,232);pdf.setFontSize(7);pdf.text("Confidencial",W-M-24.5,12.7);
+    // Datos del cliente + foto
+    let y=38;const fotoW=b.foto?32:0;
+    pdf.setDrawColor(226,232,240);pdf.setFillColor(248,250,252);pdf.roundedRect(M,y,W-2*M,b.foto?40:26,2,2,"FD");
+    pdf.setTextColor(30,58,95);pdf.setFont("helvetica","bold");pdf.setFontSize(13);pdf.text(tx(b.nombre)||"(Sin nombre)",M+5,y+9);
+    pdf.setFont("helvetica","normal");pdf.setFontSize(9);pdf.setTextColor(71,85,105);
+    const linea=[b.alienNum?"A# "+tx(b.alienNum):"A# -",b.paisOrigen?tx(b.paisOrigen):null,b.telefono?tx(b.telefono):null,b.email?tx(b.email):null].filter(Boolean);
+    pdf.text(linea.slice(0,2).join("    |    "),M+5,y+16);
+    if(linea.length>2)pdf.text(linea.slice(2).join("    |    "),M+5,y+21.5);
+    if(b.foto){try{pdf.addImage(b.foto,"JPEG",W-M-fotoW-4,y+4,fotoW,32,undefined,"FAST");}catch(e){}}
+    y+=(b.foto?40:26)+6;
+    // Secciones
+    const secciones=b.secciones||[{titulo:"Respuestas",campos:Object.entries(asiloRespuestas(b)).map(([k,v])=>({l:k,v:typeof v==="object"?JSON.stringify(v):String(v)}))}];
+    secciones.forEach(sec=>{
+      if(y>H-40){pdf.addPage();y=18;}
+      pdf.autoTable({
+        startY:y,
+        head:[[{content:tx(sec.titulo).toUpperCase(),colSpan:2}]],
+        body:(sec.campos||[]).map(c=>[tx(c.l),tx(c.v)||"-"]),
+        theme:"grid",
+        styles:{font:"helvetica",fontSize:8.5,cellPadding:[2.4,3],textColor:[30,41,59],lineColor:[226,232,240],lineWidth:0.15,valign:"top",overflow:"linebreak"},
+        headStyles:{fillColor:[30,58,95],textColor:[255,255,255],fontStyle:"bold",fontSize:9,cellPadding:[3,3]},
+        columnStyles:{0:{cellWidth:68,textColor:[100,116,139],fontStyle:"bold",fillColor:[248,250,252]},1:{cellWidth:"auto"}},
+        margin:{left:M,right:M,top:18,bottom:16},
+      });
+      y=pdf.lastAutoTable.finalY+6;
+    });
+    // Firma
+    if(b.firma){
+      if(y>H-55){pdf.addPage();y=20;}
+      pdf.setFont("helvetica","bold");pdf.setFontSize(9);pdf.setTextColor(30,58,95);pdf.text("FIRMA DEL CLIENTE",M,y+4);
+      pdf.setDrawColor(226,232,240);pdf.roundedRect(M,y+7,80,32,2,2,"S");
+      try{pdf.addImage(b.firma,"PNG",M+2,y+8,76,30,undefined,"FAST");}catch(e){}
+      pdf.setFont("helvetica","normal");pdf.setFontSize(8);pdf.setTextColor(100,116,139);
+      pdf.text(tx(b.nombre)+"  -  "+tx(recibido),M,y+44);
+    }
+    // Pie de página
+    const pc=pdf.internal.getNumberOfPages();
+    for(let i=1;i<=pc;i++){pdf.setPage(i);pdf.setDrawColor(226,232,240);pdf.setLineWidth(0.3);pdf.line(M,H-10,W-M,H-10);pdf.setFont("helvetica","normal");pdf.setFontSize(7);pdf.setTextColor(148,163,184);pdf.text("CONFIDENCIAL - Solo para uso interno  |  "+oficina+"  |  "+tx(cfg.titulo)+"  |  Pag "+i+" de "+pc,M,H-5.5);}
+    const slug=(tx(b.nombre)||"cliente").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^A-Za-z0-9]+/g,"-").replace(/^-|-$/g,"");
+    pdf.save(`${(b.tipoFormulario||"ASILO").toLowerCase()}-${slug}-${(b.fechaEnvio||"").slice(0,10)}.pdf`);
+    showToastFn("📄 PDF descargado");
+  };
   const pendientesDe=tipo=>asiloSubs.filter(b=>(b.tipoFormulario||"ASILO")===tipo&&b.estado!=="procesado").length;
   const asiloPendientes=pendientesDe("ASILO");const permisoPendientes=pendientesDe("PERMISO");const foiaPendientes=pendientesDe("FOIA");
 
@@ -4296,6 +4357,7 @@ const loadTeam=async()=>{
                         </select>
                         <button onClick={()=>vincularAsilo(b,asiloVincular)} disabled={!asiloVincular} style={{background:asiloVincular?"#0F766E":"#CBD5E1",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontWeight:700,fontSize:13,cursor:asiloVincular?"pointer":"not-allowed"}}>🔗 Vincular</button>
                       </>}
+                      <button onClick={()=>descargarFormPDF(b)} style={{background:"#1E3A5F",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontWeight:700,fontSize:13,cursor:"pointer"}}>📄 Descargar PDF</button>
                       <button onClick={()=>eliminarAsilo(b)} style={{marginLeft:"auto",background:"#FEF2F2",color:"#DC2626",border:"1px solid #FECACA",borderRadius:8,padding:"8px 14px",fontWeight:600,fontSize:13,cursor:"pointer"}}>🗑 Eliminar</button>
                     </div>
                   </div>
