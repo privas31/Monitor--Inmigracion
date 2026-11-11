@@ -19,6 +19,7 @@
   <script src="https://unpkg.com/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -4026,7 +4027,7 @@ const loadTeam=async()=>{
       </div>
     )}
 
-    {/* ── REPORTE DE ASILO (EXCEL) ───────────────────────────────────────── */}
+    {/* ── REPORTE DE ASILO (EXCEL + PDF) ─────────────────────────────────── */}
     {showReporteAsilo&&(()=>{
       const esAsiloUscis=ca=>ca.sistema==="uscis"&&/589|asilo/i.test(ca.tipoCaso||"");
       const fmtF=f=>{if(!f)return "";const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(f);return m?`${m[2]}/${m[3]}/${m[1]}`:f;};
@@ -4049,36 +4050,98 @@ const loadTeam=async()=>{
         if(a.fechaCorte&&b.fechaCorte)return a.fechaCorte.localeCompare(b.fechaCorte);
         if(a.fechaCorte)return -1;if(b.fechaCorte)return 1;return a.nombre.localeCompare(b.nombre);
       });
-      const exportarExcel=()=>{
-        if(!window.XLSX){showToastFn("No se pudo cargar Excel, recarga la página","error");return;}
-        const data=filas.map(r=>{
+      const nombreOficina=officeData?.name||"Mi Oficina";
+      const fechaHoy=new Date().toLocaleDateString("es-US",{day:"numeric",month:"long",year:"numeric"});
+      const COLS=["Nombre del cliente","Correo electrónico","Número A","País de origen","Recibo (Asilo USCIS)","Fecha de corte (EOIR)","Otros"];
+      const filtrosTxt=[raPais&&("País: "+raPais),raDesde&&("Corte desde "+fmtF(raDesde)),raHasta&&("hasta "+fmtF(raHasta)),raBusq&&("Búsqueda: "+raBusq)].filter(Boolean).join("  ·  ");
+      const archivo="reporte-asilo-"+new Date().toISOString().slice(0,10);
+
+      const exportarExcel=async()=>{
+        if(!window.ExcelJS){
+          if(!window.XLSX){showToastFn("No se pudo cargar Excel, recarga la página","error");return;}
+          const ws=window.XLSX.utils.aoa_to_sheet([COLS,...filas.map(r=>[r.nombre,r.email,r.alien,r.pais,r.recibo,fmtF(r.fechaCorte),r.otros])]);
+          const wb=window.XLSX.utils.book_new();window.XLSX.utils.book_append_sheet(wb,ws,"Reporte de Asilo");window.XLSX.writeFile(wb,archivo+".xlsx");return;
+        }
+        const wb=new window.ExcelJS.Workbook();wb.creator=nombreOficina;
+        const ws=wb.addWorksheet("Reporte de Asilo",{views:[{state:"frozen",ySplit:4}],pageSetup:{orientation:"landscape",fitToPage:true,fitToWidth:1,fitToHeight:0}});
+        const azul="FF1E3A5F",claro="FFA8C4E0",borde={style:"thin",color:{argb:"FFE2E8F0"}};
+        ws.columns=[{width:32},{width:30},{width:16},{width:18},{width:22},{width:20},{width:42}];
+        ws.mergeCells("A1:G1");ws.mergeCells("A2:G2");
+        const t1=ws.getCell("A1");t1.value=nombreOficina+" — Reporte de Asilo";t1.font={bold:true,size:15,color:{argb:"FFFFFFFF"}};
+        const t2=ws.getCell("A2");t2.value=`${fechaHoy}   |   ${filas.length} clientes   |   ${user.email}   |   CONFIDENCIAL`+(filtrosTxt?`   |   ${filtrosTxt}`:"");t2.font={size:10,color:{argb:claro}};
+        [1,2].forEach(n=>{const r=ws.getRow(n);r.height=n===1?28:20;for(let c=1;c<=7;c++){r.getCell(c).fill={type:"pattern",pattern:"solid",fgColor:{argb:azul}};r.getCell(c).alignment={vertical:"middle",indent:1};}});
+        ws.getRow(3).height=6;
+        const h=ws.getRow(4);h.values=COLS;h.height=24;
+        h.eachCell(c=>{c.font={bold:true,color:{argb:"FFFFFFFF"},size:10};c.fill={type:"pattern",pattern:"solid",fgColor:{argb:azul}};c.alignment={vertical:"middle",indent:1};c.border={bottom:borde};});
+        filas.forEach((r,i)=>{
           const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(r.fechaCorte);
-          return{"Nombre del cliente":r.nombre,"Correo electrónico":r.email,"Número A (Alien)":r.alien,"País de origen":r.pais,
-            "Número de recibo (Asilo USCIS)":r.recibo,"Fecha de corte (EOIR)":m?new Date(+m[1],+m[2]-1,+m[3]):r.fechaCorte,"Otros":r.otros};
+          const row=ws.addRow([r.nombre,r.email,r.alien,r.pais,r.recibo,m?new Date(Date.UTC(+m[1],+m[2]-1,+m[3])):r.fechaCorte,r.otros]);
+          row.height=20;
+          row.eachCell({includeEmpty:true},(c,col)=>{
+            c.border={top:borde,bottom:borde,left:borde,right:borde};
+            c.alignment={vertical:"middle",wrapText:col===7,indent:1};
+            c.font={size:10,color:{argb:"FF1E293B"},bold:col===1};
+            if(col===1)c.font={size:10,bold:true,color:{argb:azul}};
+            if(i%2===1)c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFF8FAFC"}};
+          });
+          row.getCell(6).numFmt="mm/dd/yyyy";row.getCell(6).alignment={vertical:"middle",horizontal:"center"};
         });
-        const ws=window.XLSX.utils.json_to_sheet(data,{cellDates:true,dateNF:"mm/dd/yyyy"});
-        ws["!cols"]=[{wch:30},{wch:30},{wch:16},{wch:18},{wch:26},{wch:18},{wch:40}];
-        const wb=window.XLSX.utils.book_new();
-        window.XLSX.utils.book_append_sheet(wb,ws,"Reporte de Asilo");
-        window.XLSX.writeFile(wb,"reporte-asilo-"+new Date().toISOString().slice(0,10)+".xlsx");
+        ws.autoFilter={from:{row:4,column:1},to:{row:4,column:7}};
+        const buf=await wb.xlsx.writeBuffer();
+        const url=URL.createObjectURL(new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+        const a=document.createElement("a");a.href=url;a.download=archivo+".xlsx";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
         showToastFn("Excel: "+filas.length+" clientes");
       };
+
+      const exportarPDF=()=>{
+        const jsPDF=(window.jspdf&&window.jspdf.jsPDF)?window.jspdf.jsPDF:window.jsPDF;
+        if(!jsPDF){showToastFn("Error cargando PDF. Recarga la página.","error");return;}
+        const limpio=x=>String(x||"").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^\x20-\x7E]/g,"").trim();
+        const pdf=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
+        const W=297,M=10;
+        pdf.setFillColor(30,58,95);pdf.rect(0,0,W,26,"F");
+        pdf.setTextColor(255,255,255);pdf.setFontSize(12);pdf.setFont("helvetica","bold");
+        pdf.text(limpio(nombreOficina)+"  -  Reporte de Asilo",M,10);
+        pdf.setFontSize(7.5);pdf.setFont("helvetica","normal");pdf.setTextColor(168,196,224);
+        pdf.text(limpio(fechaHoy)+"   |   "+filas.length+" clientes   |   "+limpio(user.email)+(filtrosTxt?"   |   "+limpio(filtrosTxt):""),M,17);
+        pdf.setFillColor(44,76,116);pdf.setDrawColor(90,120,160);pdf.setLineWidth(0.2);pdf.roundedRect(W-M-30,7,28,7,1.5,1.5,"FD");
+        pdf.setTextColor(203,216,232);pdf.setFontSize(6.5);pdf.text("Confidencial",W-M-29,12);
+        pdf.autoTable({
+          startY:30,
+          head:[["Nombre del cliente","Correo electronico","Numero A","Pais","Recibo (Asilo USCIS)","Fecha de corte (EOIR)","Otros"]],
+          body:filas.map(r=>[limpio(r.nombre)||"-",limpio(r.email)||"-",limpio(r.alien)||"-",limpio(r.pais)||"-",limpio(r.recibo)||"-",fmtF(r.fechaCorte)||"-",limpio(r.otros)||"-"]),
+          styles:{fontSize:7.5,cellPadding:[3,4],overflow:"linebreak",valign:"middle",textColor:[30,41,59],lineColor:[226,232,240],lineWidth:0.1},
+          headStyles:{fillColor:[30,58,95],textColor:[255,255,255],fontStyle:"bold",fontSize:7.5,cellPadding:[4,4],lineWidth:0},
+          alternateRowStyles:{fillColor:[248,250,252]},
+          columnStyles:{0:{cellWidth:46,fontStyle:"bold",textColor:[30,58,95]},1:{cellWidth:50},2:{cellWidth:26},3:{cellWidth:26},4:{cellWidth:34},5:{cellWidth:30,halign:"center"},6:{cellWidth:65}},
+          margin:{left:M,right:M},tableLineColor:[226,232,240],tableLineWidth:0.1
+        });
+        const pc=pdf.internal.getNumberOfPages();
+        for(let i=1;i<=pc;i++){pdf.setPage(i);const pH=pdf.internal.pageSize.height;pdf.setDrawColor(226,232,240);pdf.setLineWidth(0.3);pdf.line(M,pH-8,W-M,pH-8);pdf.setFontSize(6.5);pdf.setTextColor(148,163,184);pdf.setFont("helvetica","normal");pdf.text("CONFIDENCIAL - Solo para uso interno  |  "+limpio(nombreOficina)+"  |  Pag "+i+" de "+pc,M,pH-3.5);}
+        pdf.save(archivo+".pdf");showToastFn("PDF: "+filas.length+" clientes");
+      };
+
       const inp={padding:"8px 10px",borderRadius:8,border:"1px solid #D1D5DB",fontSize:13,background:"#fff"};
+      const th={padding:"14px 16px",fontSize:12.5,fontWeight:700,color:"#fff",textAlign:"left",whiteSpace:"nowrap"};
+      const td={padding:"14px 16px",fontSize:13,color:"#1E293B",borderRight:"1px solid #E2E8F0",borderBottom:"1px solid #E2E8F0",verticalAlign:"middle"};
+      const btn=(bg)=>({background:bg,border:"none",borderRadius:8,color:"#fff",padding:"9px 16px",cursor:filas.length?"pointer":"not-allowed",fontSize:13,fontWeight:700,opacity:filas.length?1:0.5});
       return(
       <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.75)",zIndex:200,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 12px",overflowY:"auto"}}>
-        <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:1150,boxShadow:"0 24px 80px rgba(0,0,0,0.35)",overflow:"hidden"}}>
-          <div style={{background:"linear-gradient(135deg,#4C1D95 0%,#6D28D9 100%)",padding:"20px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+        <div style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:1250,boxShadow:"0 24px 80px rgba(0,0,0,0.35)",overflow:"hidden"}}>
+          <div style={{background:"#1E3A5F",padding:"26px 32px",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
             <div>
-              <div style={{fontSize:20,fontWeight:800,color:"#fff"}}>⚖️ {t("Reporte de Asilo","Asylum report")}</div>
-              <div style={{fontSize:12,color:"#DDD6FE",marginTop:4}}>{filas.length} {t("de","of")} {todas.length} {t("clientes con asilo en USCIS","clients with USCIS asylum")}</div>
+              <div style={{fontSize:22,fontWeight:800,color:"#fff"}}>{nombreOficina} <span style={{fontWeight:500,color:"#A8C4E0",fontSize:17}}>— Reporte de Asilo</span></div>
+              <div style={{fontSize:13,color:"#A8C4E0",marginTop:8}}>{fechaHoy} &nbsp;|&nbsp; {filas.length} {t("clientes","clients")}{filas.length!==todas.length?` (${t("de","of")} ${todas.length})`:""} &nbsp;|&nbsp; {user.email}</div>
             </div>
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={exportarExcel} disabled={filas.length===0} style={{background:"#16A34A",border:"none",borderRadius:8,color:"#fff",padding:"9px 16px",cursor:filas.length?"pointer":"not-allowed",fontSize:13,fontWeight:700,opacity:filas.length?1:0.5}}>⬇️ {t("Exportar a Excel","Export to Excel")}</button>
-              <button onClick={()=>setShowReporteAsilo(false)} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:8,color:"#fff",padding:"9px 14px",cursor:"pointer",fontSize:13}}>✕ {t("Cerrar","Close")}</button>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <span style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.25)",color:"#CBD8E8",borderRadius:7,padding:"7px 12px",fontSize:12}}>Confidencial</span>
+              <button onClick={exportarPDF} disabled={!filas.length} style={btn("#DC2626")}>📄 PDF</button>
+              <button onClick={exportarExcel} disabled={!filas.length} style={btn("#16A34A")}>⬇️ Excel</button>
+              <button onClick={()=>setShowReporteAsilo(false)} style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:8,color:"#fff",padding:"9px 14px",cursor:"pointer",fontSize:13}}>✕</button>
             </div>
           </div>
-          <div style={{padding:"14px 24px",display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end",borderBottom:"1px solid #E2E8F0",background:"#F8FAFC"}}>
-            <div style={{flex:"1 1 200px"}}><div style={{fontSize:11,fontWeight:600,color:"#64748B",marginBottom:3}}>{t("BUSCAR","SEARCH")}</div>
+          <div style={{padding:"14px 32px",display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end",borderBottom:"1px solid #E2E8F0",background:"#F8FAFC"}}>
+            <div style={{flex:"1 1 220px"}}><div style={{fontSize:11,fontWeight:600,color:"#64748B",marginBottom:3}}>{t("BUSCAR","SEARCH")}</div>
               <input value={raBusq} onChange={e=>setRaBusq(e.target.value)} placeholder={t("Nombre, número A, recibo...","Name, A#, receipt...")} style={{...inp,width:"100%"}}/></div>
             <div><div style={{fontSize:11,fontWeight:600,color:"#64748B",marginBottom:3}}>{t("PAÍS","COUNTRY")}</div>
               <select value={raPais} onChange={e=>setRaPais(e.target.value)} style={inp}><option value="">{t("Todos","All")}</option>{paises.map(p=><option key={p} value={p}>{p}</option>)}</select></div>
@@ -4086,28 +4149,27 @@ const loadTeam=async()=>{
               <input type="date" value={raDesde} onChange={e=>setRaDesde(e.target.value)} style={inp}/></div>
             <div><div style={{fontSize:11,fontWeight:600,color:"#64748B",marginBottom:3}}>{t("CORTE HASTA","COURT TO")}</div>
               <input type="date" value={raHasta} onChange={e=>setRaHasta(e.target.value)} style={inp}/></div>
-            {(raBusq||raPais||raDesde||raHasta)&&<button onClick={()=>{setRaBusq("");setRaPais("");setRaDesde("");setRaHasta("");}} style={{...inp,cursor:"pointer",color:"#6D28D9",fontWeight:600}}>{t("Limpiar filtros","Clear filters")}</button>}
+            {(raBusq||raPais||raDesde||raHasta)&&<button onClick={()=>{setRaBusq("");setRaPais("");setRaDesde("");setRaHasta("");}} style={{...inp,cursor:"pointer",color:"#1E3A5F",fontWeight:600}}>{t("Limpiar filtros","Clear filters")}</button>}
           </div>
-          <div style={{overflowX:"auto",padding:"0 0 8px"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-              <thead><tr style={{background:"#F1F5F9",color:"#334155",textAlign:"left"}}>
-                {["Nombre del cliente","Correo electrónico","Número A","País de origen","Recibo (Asilo USCIS)","Fecha de corte (EOIR)","Otros"].map(h=><th key={h} style={{padding:"10px 12px",fontSize:11,fontWeight:700,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>)}
-              </tr></thead>
+          <div style={{padding:"20px 32px 28px",overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",border:"1px solid #E2E8F0"}}>
+              <thead><tr style={{background:"#1E3A5F"}}>{COLS.map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
               <tbody>
-                {filas.length===0&&<tr><td colSpan={7} style={{padding:30,textAlign:"center",color:"#94A3B8"}}>{t("No hay clientes que coincidan.","No matching clients.")}</td></tr>}
+                {filas.length===0&&<tr><td colSpan={7} style={{...td,padding:34,textAlign:"center",color:"#94A3B8"}}>{t("No hay clientes que coincidan.","No matching clients.")}</td></tr>}
                 {filas.map((r,i)=>(
-                  <tr key={r.id} style={{borderTop:"1px solid #E2E8F0",background:i%2?"#FAFAFB":"#fff"}}>
-                    <td style={{padding:"9px 12px",fontWeight:700,color:"#1E3A5F"}}>{r.nombre||"—"}</td>
-                    <td style={{padding:"9px 12px"}}>{r.email||"—"}</td>
-                    <td style={{padding:"9px 12px",fontFamily:"monospace"}}>{r.alien||"—"}</td>
-                    <td style={{padding:"9px 12px"}}>{r.pais||"—"}</td>
-                    <td style={{padding:"9px 12px",fontFamily:"monospace"}}>{r.recibo||"—"}</td>
-                    <td style={{padding:"9px 12px",whiteSpace:"nowrap"}}>{fmtF(r.fechaCorte)||"—"}</td>
-                    <td style={{padding:"9px 12px",maxWidth:260,whiteSpace:"pre-wrap"}}>{r.otros||"—"}</td>
+                  <tr key={r.id} style={{background:i%2?"#F8FAFC":"#fff"}}>
+                    <td style={{...td,fontWeight:700,color:"#1E3A5F"}}>{r.nombre||"—"}</td>
+                    <td style={td}>{r.email||"—"}</td>
+                    <td style={{...td,whiteSpace:"nowrap"}}>{r.alien||"—"}</td>
+                    <td style={td}>{r.pais||"—"}</td>
+                    <td style={{...td,whiteSpace:"nowrap"}}>{r.recibo||"—"}</td>
+                    <td style={{...td,textAlign:"center",whiteSpace:"nowrap"}}>{fmtF(r.fechaCorte)||"—"}</td>
+                    <td style={{...td,maxWidth:280,whiteSpace:"pre-wrap",borderRight:"none"}}>{r.otros||"—"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            <div style={{marginTop:14,paddingTop:10,borderTop:"1px solid #E2E8F0",fontSize:11,color:"#94A3B8"}}>CONFIDENCIAL — Solo para uso interno &nbsp;|&nbsp; {nombreOficina}</div>
           </div>
         </div>
       </div>);
