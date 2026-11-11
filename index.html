@@ -39,7 +39,10 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
     const storage = getStorage(app);
-    window._firebase = { auth, db, storage, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, getDoc, ref, uploadBytesResumable, getDownloadURL };
+    // App secundaria solo para crear usuarios nuevos sin cerrar la sesión del administrador
+    const appAltaUsuarios = initializeApp(firebaseConfig, "altaUsuarios");
+    const authAltaUsuarios = getAuth(appAltaUsuarios);
+    window._firebase = { auth, authAltaUsuarios, db, storage, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, getDoc, ref, uploadBytesResumable, getDownloadURL };
 
     // Segunda app: immigration-platform-11380 (jotform_submissions)
     const firebaseConfigPlatform = {
@@ -1472,11 +1475,12 @@ const loadTeam=async()=>{
     if(!newUserEmail||!newUserPass||!newUserName){setAddUserMsg("❌ Completa todos los campos");return;}
     setAddUserLoading(true);setAddUserMsg("");
     try{
-      const{auth,createUserWithEmailAndPassword,db,doc,setDoc}=window._firebase;
+      const{authAltaUsuarios,signOut,createUserWithEmailAndPassword,db,doc,setDoc}=window._firebase;
       const officeId=officeData?.id||userData?.officeId||"";
-      // 1. Crear en Firebase Auth
-      const cred=await createUserWithEmailAndPassword(auth,newUserEmail,newUserPass);
-      // 2. Crear documento en Firestore
+      // 1. Crear en Firebase Auth (en una sesión aparte, para que el administrador siga conectado)
+      const cred=await createUserWithEmailAndPassword(authAltaUsuarios,newUserEmail,newUserPass);
+      try{await signOut(authAltaUsuarios);}catch(e){}
+      // 2. El administrador crea el documento del usuario en Firestore
       await setDoc(doc(db,"users",cred.user.uid),{
         displayName:newUserName.trim(),
         email:newUserEmail.trim(),
