@@ -412,7 +412,7 @@ function App(){
   const[showChecklist,setShowChecklist]=useState(false);
   const[openMenuId,setOpenMenuId]=useState(null);
   const[lang,setLang]=useState("es");
-  const[activeNav,setActiveNav]=useState("monitor");
+  const[activeNav,setActiveNav]=useState("inicio");
   const[historialCliente,setHistorialCliente]=useState(null);
   const[historialData,setHistorialData]=useState([]);const[pdfOpts,setPdfOpts]=useState({sistema:"todos",estado:"todos"});
   const[showAddUser,setShowAddUser]=useState(false);const[newUserEmail,setNewUserEmail]=useState("");const[newUserPass,setNewUserPass]=useState("");const[addUserMsg,setAddUserMsg]=useState("");
@@ -447,7 +447,7 @@ function App(){
   // ── Forma Asilo New + Reporte de Asilo ──
   const[showReportesMenu,setShowReportesMenu]=useState(false);
   const[formsOpen,setFormsOpen]=useState(false);const[borradoresFiltro,setBorradoresFiltro]=useState("");
-  const[showReporteAsilo,setShowReporteAsilo]=useState(false);const[reporteTipo,setReporteTipo]=useState("asilo");const[raSel,setRaSel]=useState("");
+  const[showReporteAsilo,setShowReporteAsilo]=useState(false);const[reporteTipo,setReporteTipo]=useState("asilo");const[calRef,setCalRef]=useState(()=>new Date());const[calVista,setCalVista]=useState("mes");const[inicioBusq,setInicioBusq]=useState("");const[expBusq,setExpBusq]=useState("");const[expFiltro,setExpFiltro]=useState("todos");const[raSel,setRaSel]=useState("");
   const[raBusq,setRaBusq]=useState("");const[raPais,setRaPais]=useState("");
   const[raDesde,setRaDesde]=useState("");const[raHasta,setRaHasta]=useState("");
   const[showAsiloNew,setShowAsiloNew]=useState(false);
@@ -1980,13 +1980,252 @@ const loadTeam=async()=>{
   };
 
   // ── SIDEBAR NAV ITEMS ──────────────────────────────────────────────────────
+  // ══ VISTAS: INICIO · CALENDARIO · EXPEDIENTES ════════════════════════════════
+  const pad2=n=>String(n).padStart(2,"0");
+  const toISO=d=>`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  const nombreCorto=n=>{const w=String(n||"").trim().split(/\s+/).filter(Boolean);if(w.length<2)return w[0]||"";const ap=w.length>=4?w[2]:w[1];return w[0][0]+". "+ap;};
+  const TIPO_EV={
+    corte:{label:t("Corte","Court"),bg:"#EEF2FF",color:"#3730A3",bd:"#6366F1"},
+    bio:{label:t("Biométricos","Biometrics"),bg:"#F0F9FF",color:"#075985",bd:"#0EA5E9"},
+    ent:{label:t("Entrevista","Interview"),bg:"#F5F3FF",color:"#5B21B6",bd:"#8B5CF6"},
+    ead:{label:t("Vence EAD","EAD expires"),bg:"#F8FAFC",color:"#334155",bd:"#94A3B8"},
+  };
+  const EV_URG={bg:"#FEF2F2",color:"#B91C1C",bd:"#DC2626"};
+  const EV_PAS={bg:"#F8FAFC",color:"#94A3B8",bd:"#E2E8F0"};
+  const DIAS_URGENTE=3;
+  const eventosOficina=(()=>{
+    const ev=[];
+    clientes.forEach(c=>{
+      if(c.deportado)return;
+      (c.casos||[]).forEach((ca,i)=>{
+        const k=c.id+"-"+i;
+        if(ca.sistema==="eoir"&&ca.fechaCorte)ev.push({k:k+"c",f:ca.fechaCorte,tipo:"corte",c,ca,det:[ca.corte,ca.juez&&(t("Juez ","Judge ")+ca.juez)].filter(Boolean).join(" · ")||(ca.tipoCaso||"EOIR")});
+        if(ca.sistema==="uscis"){
+          if(ca.fechaHuellas)ev.push({k:k+"b",f:ca.fechaHuellas,tipo:"bio",c,ca,det:ca.tipoCaso||"USCIS"});
+          if(ca.fechaCorte)ev.push({k:k+"e",f:ca.fechaCorte,tipo:"ent",c,ca,det:ca.tipoCaso||"USCIS"});
+        }
+        if(ca.tieneEAD==="si"&&ca.eadVence)ev.push({k:k+"d",f:ca.eadVence,tipo:"ead",c,ca,det:ca.eadRenovado==="si"?t("Renovado","Renewed"):t("Renovación pendiente","Renewal pending")});
+      });
+    });
+    return ev.filter(e=>/^\d{4}-\d{2}-\d{2}/.test(e.f)).map(e=>({...e,f:e.f.slice(0,10),d:getDias(e.f.slice(0,10))})).sort((a,b)=>a.f.localeCompare(b.f));
+  })();
+  const esUrgente=e=>e.d!=null&&e.d>=0&&e.d<=DIAS_URGENTE&&!(e.tipo==="ead"&&e.ca.eadRenovado==="si");
+  const urgentes=eventosOficina.filter(esUrgente);
+  const estiloEv=e=>e.d<0?EV_PAS:esUrgente(e)?EV_URG:TIPO_EV[e.tipo];
+  const cuandoTxt=d=>d===0?t("Hoy","Today"):d===1?t("Mañana","Tomorrow"):d<0?t(`Hace ${-d} días`,`${-d} days ago`):t(`En ${d} días`,`In ${d} days`);
+  const MESES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+  const MESES_C=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const DIAS_S=[t("Dom","Sun"),t("Lun","Mon"),t("Mar","Tue"),t("Mié","Wed"),t("Jue","Thu"),t("Vie","Fri"),t("Sáb","Sat")];
+  const abrirCliente=c=>{if(c)openEdit(c);};
+
+  const ChipEv=({e,grande})=>{const st=estiloEv(e);return(
+    <div onClick={ev=>{ev.stopPropagation();abrirCliente(e.c);}} title={`${TIPO_EV[e.tipo].label} — ${e.c.nombre}${e.det?" · "+e.det:""}`}
+      style={{fontSize:grande?12:10.5,lineHeight:1.3,padding:grande?"5px 8px":"3px 6px",borderRadius:5,marginBottom:3,borderLeft:"3px solid "+st.bd,background:st.bg,color:st.color,fontWeight:esUrgente(e)?700:500,cursor:"pointer",wordBreak:"break-word"}}>
+      {e.d<0&&"✓ "}{TIPO_EV[e.tipo].label} · {nombreCorto(e.c.nombre)}
+      {grande&&e.det&&<div style={{fontSize:11,fontWeight:400,opacity:.85,marginTop:1}}>{e.det}</div>}
+    </div>);};
+
+  const renderCalendario=({alto})=>{
+    const ref=calRef;
+    const hoyIso=toISO(new Date());
+    const porDia={};eventosOficina.forEach(e=>{(porDia[e.f]=porDia[e.f]||[]).push(e);});
+    let dias=[];
+    if(calVista==="semana"){const s0=new Date(ref);s0.setDate(s0.getDate()-s0.getDay());for(let i=0;i<7;i++){const d=new Date(s0);d.setDate(s0.getDate()+i);dias.push(d);}}
+    else{const p=new Date(ref.getFullYear(),ref.getMonth(),1);const s0=new Date(p);s0.setDate(1-p.getDay());const fin=new Date(ref.getFullYear(),ref.getMonth()+1,0);const semanas=Math.ceil((p.getDay()+fin.getDate())/7);for(let i=0;i<semanas*7;i++){const d=new Date(s0);d.setDate(s0.getDate()+i);dias.push(d);}}
+    const mover=n=>{const d=new Date(ref);if(calVista==="semana")d.setDate(d.getDate()+7*n);else{d.setDate(1);d.setMonth(d.getMonth()+n);}setCalRef(d);};
+    const titulo=calVista==="semana"?(()=>{const a=dias[0],b=dias[6];return `${a.getDate()} ${MESES_C[a.getMonth()]} – ${b.getDate()} ${MESES_C[b.getMonth()]} ${b.getFullYear()}`;})():`${MESES[ref.getMonth()].replace(/^./,m=>m.toUpperCase())} ${ref.getFullYear()}`;
+    const btn=on=>({border:"1px solid "+(on?"#BFDBFE":"#E2E8F0"),borderRadius:8,padding:"6px 11px",fontSize:12,color:on?"#1D4ED8":"#334155",background:on?"#EFF6FF":"#fff",fontWeight:on?600:400,cursor:"pointer",fontFamily:"inherit"});
+    const maxChips=calVista==="semana"?20:3;
+    return(
+      <div style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 18px",borderBottom:"1px solid #F1F5F9",gap:10,flexWrap:"wrap"}}>
+          <div><div style={{fontSize:15,fontWeight:700,color:"#1E3A5F"}}>{t("Calendario de la oficina","Office calendar")}</div><div style={{fontSize:11.5,color:"#94A3B8",marginTop:2}}>{titulo}</div></div>
+          <div style={{display:"flex",gap:6}}>
+            <button style={btn(calVista==="mes")} onClick={()=>setCalVista("mes")}>{t("Mes","Month")}</button>
+            <button style={btn(calVista==="semana")} onClick={()=>setCalVista("semana")}>{t("Semana","Week")}</button>
+            <button style={btn(false)} onClick={()=>mover(-1)}><i className="ti ti-chevron-left"></i></button>
+            <button style={btn(false)} onClick={()=>setCalRef(new Date())}>{t("Hoy","Today")}</button>
+            <button style={btn(false)} onClick={()=>mover(1)}><i className="ti ti-chevron-right"></i></button>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:14,padding:"10px 18px 0",fontSize:11,color:"#64748B",flexWrap:"wrap"}}>
+          {Object.entries(TIPO_EV).map(([k,v])=><span key={k} style={{display:"flex",alignItems:"center",gap:5}}><b style={{width:9,height:9,borderRadius:3,background:v.bd,display:"inline-block"}}></b>{v.label}</span>)}
+          <span style={{display:"flex",alignItems:"center",gap:5}}><b style={{width:9,height:9,borderRadius:3,background:"#DC2626",display:"inline-block"}}></b>{t(`Urgente (${DIAS_URGENTE} días o menos)`,`Urgent (${DIAS_URGENTE} days or less)`)}</span>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",padding:"10px 18px 18px"}}>
+          {DIAS_S.map(d=><div key={d} style={{fontSize:11,fontWeight:700,color:"#94A3B8",textTransform:"uppercase",padding:6,letterSpacing:".05em"}}>{d}</div>)}
+          {dias.map((d,i)=>{
+            const iso=toISO(d),otro=calVista==="mes"&&d.getMonth()!==ref.getMonth(),esHoy=iso===hoyIso;
+            const evs=porDia[iso]||[];
+            return(
+              <div key={iso} style={{minHeight:calVista==="semana"?(alto?420:300):(alto?110:92),minWidth:0,borderTop:"1px solid #F1F5F9",borderLeft:"1px solid #F1F5F9",borderRight:i%7===6?"1px solid #F1F5F9":"none",borderBottom:i>=dias.length-7?"1px solid #F1F5F9":"none",padding:6,background:esHoy?"#F8FBFF":"transparent"}}>
+                <div style={{fontSize:12,fontWeight:600,color:otro?"#CBD5E1":"#334155",marginBottom:4,...(esHoy?{background:"#2563EB",color:"#fff",borderRadius:20,width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center"}:{})}}>{d.getDate()}</div>
+                {!otro&&evs.slice(0,maxChips).map(e=><ChipEv key={e.k} e={e} grande={calVista==="semana"}/>)}
+                {!otro&&evs.length>maxChips&&<div onClick={()=>{setCalRef(d);setCalVista("semana");}} style={{fontSize:10.5,color:"#2563EB",fontWeight:600,cursor:"pointer",padding:"1px 4px"}}>+{evs.length-maxChips} {t("más","more")}</div>}
+              </div>);
+          })}
+        </div>
+      </div>);
+  };
+
+  const renderProximas=(dias,limite)=>{
+    const lista=eventosOficina.filter(e=>e.d>=0&&e.d<=dias).slice(0,limite);
+    return(
+      <div style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 18px",borderBottom:"1px solid #F1F5F9"}}>
+          <div style={{fontSize:15,fontWeight:700,color:"#1E3A5F"}}>{t("Próximas fechas","Upcoming dates")}</div><div style={{fontSize:11.5,color:"#94A3B8"}}>{dias} {t("días","days")}</div>
+        </div>
+        {lista.length===0&&<div style={{padding:"22px 18px",fontSize:13,color:"#94A3B8",textAlign:"center"}}>{t("No hay fechas próximas.","No upcoming dates.")}</div>}
+        {lista.map(e=>{const u=esUrgente(e);const dt=new Date(e.f+"T00:00:00");return(
+          <div key={e.k} onClick={()=>abrirCliente(e.c)} style={{display:"flex",gap:12,alignItems:"center",padding:"11px 18px",borderBottom:"1px solid #F1F5F9",cursor:"pointer"}}>
+            <div style={{width:44,textAlign:"center",border:"1px solid "+(u?"#FECACA":"#E2E8F0"),background:u?"#FEF2F2":"#fff",borderRadius:8,padding:"4px 0",flexShrink:0}}>
+              <div style={{fontSize:9.5,color:"#64748B",textTransform:"uppercase",fontWeight:700}}>{MESES_C[dt.getMonth()]}</div>
+              <div style={{fontSize:17,fontWeight:800,color:u?"#DC2626":"#1E3A5F",lineHeight:1.1}}>{dt.getDate()}</div>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#0F172A"}}>{TIPO_EV[e.tipo].label} — {e.c.nombre}</div>
+              <div style={{fontSize:11.5,color:"#64748B",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.det}</div>
+            </div>
+            <div style={{fontSize:11.5,color:u?"#DC2626":"#64748B",fontWeight:u?800:600,whiteSpace:"nowrap"}}>{cuandoTxt(e.d)}</div>
+          </div>);})}
+        <div onClick={()=>setActiveNav("calendario")} style={{padding:"10px 18px",fontSize:12,color:"#2563EB",fontWeight:600,cursor:"pointer"}}>{t("Ver calendario completo →","Open full calendar →")}</div>
+      </div>);
+  };
+
+  const renderInicio=()=>{
+    const hoy=new Date();
+    const fechaLarga=hoy.toLocaleDateString(lang==="es"?"es-US":"en-US",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).replace(/^./,m=>m.toUpperCase());
+    const NOMBRES={"p_rivas@live.com":"Patricia Rivas"};
+    const dn=userData?.displayName&&!String(userData.displayName).includes("@")?userData.displayName:"";
+    const nombre=NOMBRES[(user?.email||"").toLowerCase()]||dn||(user?.email||"").split("@")[0];
+    const activos=clientes.filter(c=>!c.deportado);
+    const mesIso=toISO(hoy).slice(0,7);
+    const nuevosMes=clientes.filter(c=>(c.createdAt||"").slice(0,7)===mesIso).length;
+    const semana=eventosOficina.filter(e=>e.d>=0&&e.d<=6&&e.tipo!=="ead");
+    const cuenta=k=>semana.filter(e=>e.tipo===k).length;
+    const detSemana=[[cuenta("corte"),t("corte","court"),t("cortes","courts")],[cuenta("bio"),t("biométrico","biometric"),t("biométricos","biometrics")],[cuenta("ent"),t("entrevista","interview"),t("entrevistas","interviews")]].filter(x=>x[0]).map(([n,s,p])=>`${n} ${n===1?s:p}`).join(" · ")||t("Sin citas","No appointments");
+    const recibidos=[
+      ...asiloSubs.map(b=>({id:b.id,nombre:b.nombre,tipo:(FORMS_LINK[b.tipoFormulario]||FORMS_LINK.ASILO).titulo,f:b.fechaEnvio,nuevo:b.estado!=="procesado",abrir:()=>{setFormTipo(b.tipoFormulario||"ASILO");setAsiloTab(b.estado==="procesado"?"procesadas":"pendientes");setAsiloAbierto(b.id);setShowAsiloNew(true);}})),
+      ...borradores.map(b=>({id:b.id,nombre:b.nombre||b.nombreCompleto||"(Sin nombre)",tipo:b.labelFormulario||b.tipoFormulario||"Formulario",f:b.fechaEnvio||b.createdAt,nuevo:b.estado==="borrador"||!b.estado,abrir:()=>{setBorradoresFiltro("");setShowBorradores(true);}})),
+    ].sort((a,b)=>(b.f||"").localeCompare(a.f||"")).slice(0,4);
+    const cuandoF=f=>{if(!f)return "";const d=new Date(f);const dd=getDias(toISO(d));return dd===0?t("Hoy","Today")+" "+d.toLocaleTimeString("es-US",{hour:"numeric",minute:"2-digit"}):dd===-1?t("Ayer","Yesterday"):`${d.getDate()} ${MESES_C[d.getMonth()].toLowerCase()}`;};
+    const kpi=(titulo,icono,valor,sub,urg,onClick)=>(
+      <div onClick={onClick} style={{background:urg?"#FFFBFB":"#fff",border:"1px solid "+(urg?"#FECACA":"#E2E8F0"),borderRadius:12,padding:"14px 16px",cursor:onClick?"pointer":"default"}}>
+        <div style={{fontSize:12,color:"#64748B",fontWeight:600,display:"flex",justifyContent:"space-between"}}>{titulo}<i className={"ti "+icono} style={{fontSize:16,color:urg?"#EF4444":"#94A3B8"}}></i></div>
+        <div style={{fontSize:28,fontWeight:800,marginTop:6,color:urg?"#DC2626":"#1E3A5F"}}>{valor}</div>
+        <div style={{fontSize:11.5,color:urg?"#DC2626":"#94A3B8",fontWeight:urg?600:400,marginTop:2}}>{sub}</div>
+      </div>);
+    const buscar=()=>{const q=inicioBusq.trim();if(!q)return;setBusqueda(q);setBusquedaActiva(q);setActiveNav("monitor");setInicioBusq("");};
+    return(
+      <div style={{padding:"26px 30px 34px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16,flexWrap:"wrap",marginBottom:20}}>
+          <div><div style={{fontSize:25,fontWeight:800,color:"#0F172A",letterSpacing:"-0.01em"}}>{t("Bienvenida","Welcome")}, {nombre}</div><div style={{fontSize:13.5,color:"#64748B",marginTop:4}}>{fechaLarga}</div></div>
+          <div style={{display:"flex",alignItems:"center",gap:8,border:"1px solid #E2E8F0",background:"#fff",borderRadius:10,padding:"0 6px 0 14px",width:340,maxWidth:"100%"}}>
+            <i className="ti ti-search" style={{color:"#94A3B8"}}></i>
+            <input value={inicioBusq} onChange={e=>setInicioBusq(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")buscar();}} placeholder={t("Buscar cliente, número A, recibo...","Search client, A#, receipt...")} style={{flex:1,border:"none",outline:"none",fontSize:13,padding:"10px 0",background:"transparent",fontFamily:"inherit"}}/>
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:14,marginBottom:18}}>
+          {kpi(t("Clientes activos","Active clients"),"ti-users",activos.length,nuevosMes?`${nuevosMes} ${t(nuevosMes===1?"nuevo este mes":"nuevos este mes","new this month")}`:t("Sin nuevos este mes","None new this month"),false,()=>setActiveNav("monitor"))}
+          {kpi(t("Citas esta semana","Appointments this week"),"ti-calendar-event",semana.length,detSemana,false,()=>{setCalVista("semana");setCalRef(new Date());setActiveNav("calendario");})}
+          {kpi(t("Formularios nuevos","New forms"),"ti-file-text",formsNuevos,formsNuevos?t("Por revisar","To review"):t("Todo al día","All caught up"),false,()=>setFormsOpen(true))}
+          {kpi(t("Urgente","Urgent"),"ti-alert-triangle",urgentes.length,urgentes.length?t(`Fechas en los próximos ${DIAS_URGENTE} días`,`Dates in the next ${DIAS_URGENTE} days`):t("Nada urgente","Nothing urgent"),urgentes.length>0,()=>{setCalVista("semana");setCalRef(new Date());setActiveNav("calendario");})}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 340px",gap:16,alignItems:"start"}}>
+          {renderCalendario({})}
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            {renderProximas(14,6)}
+            <div style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:12}}>
+              <div style={{padding:"14px 18px",borderBottom:"1px solid #F1F5F9",fontSize:15,fontWeight:700,color:"#1E3A5F"}}>{t("Formularios recibidos","Received forms")}</div>
+              {recibidos.length===0&&<div style={{padding:"22px 18px",fontSize:13,color:"#94A3B8",textAlign:"center"}}>{t("Todavía no hay formularios.","No forms yet.")}</div>}
+              {recibidos.map(r=>(
+                <div key={r.id} onClick={r.abrir} style={{display:"flex",gap:12,alignItems:"center",padding:"11px 18px",borderBottom:"1px solid #F1F5F9",cursor:"pointer"}}>
+                  <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:"#0F172A"}}>{r.nombre||"(Sin nombre)"}</div><div style={{fontSize:11.5,color:"#64748B",marginTop:1}}>{r.tipo} · {cuandoF(r.f)}</div></div>
+                  <span style={{fontSize:10.5,padding:"2px 8px",borderRadius:20,fontWeight:700,background:r.nuevo?"#EFF6FF":"#F1F5F9",color:r.nuevo?"#1D4ED8":"#64748B"}}>{r.nuevo?t("Nuevo","New"):t("Procesado","Processed")}</span>
+                </div>))}
+              <div onClick={()=>setFormsOpen(true)} style={{padding:"10px 18px",fontSize:12,color:"#2563EB",fontWeight:600,cursor:"pointer"}}>{t("Ver formularios en el menú →","See forms in the menu →")}</div>
+            </div>
+            {isAdmin&&<div onClick={()=>setShowDashboard(true)} style={{fontSize:12,color:"#64748B",textAlign:"center",cursor:"pointer",padding:4}}><i className="ti ti-chart-bar"></i> {t("Ver estadísticas completas","See full statistics")}</div>}
+          </div>
+        </div>
+      </div>);
+  };
+
+  const renderCalendarioPagina=()=>(
+    <div style={{padding:"26px 30px 34px"}}>
+      <div style={{marginBottom:18}}><div style={{fontSize:25,fontWeight:800,color:"#0F172A"}}>{t("Calendario","Calendar")}</div><div style={{fontSize:13.5,color:"#64748B",marginTop:4}}>{t("Audiencias, biométricos, entrevistas y vencimientos de EAD de todos tus clientes.","Hearings, biometrics, interviews and EAD expirations for all clients.")}</div></div>
+      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 340px",gap:16,alignItems:"start"}}>
+        {renderCalendario({alto:true})}
+        {renderProximas(30,12)}
+      </div>
+    </div>);
+
+  const renderExpedientes=()=>{
+    const SIS={uscis:{l:"USCIS",bg:"#DBEAFE",c:"#1D4ED8"},eoir:{l:"EOIR",bg:"#EDE9FE",c:"#6D28D9"},foia:{l:"FOIA",bg:"#CFFAFE",c:"#0E7490"}};
+    const filasTodas=clientes.flatMap(c=>(c.casos||[]).map((ca,i)=>{
+      const fechas=[ca.sistema==="foia"?null:ca.fechaCorte,ca.fechaHuellas].filter(f=>f&&/^\d{4}-\d{2}-\d{2}/.test(f)).map(f=>f.slice(0,10)).sort();
+      const fut=fechas.filter(f=>getDias(f)>=0);
+      const prox=fut[0]||fechas[fechas.length-1]||"";
+      return{k:c.id+"-"+i,c,ca,sis:ca.sistema||"uscis",exp:c.expediente||"",tipo:ca.tipoCaso||"—",num:ca.receiptNum||ca.foiaTracking||"",prox,dias:prox?getDias(prox):null,estatus:ca.estatusCaso||ca.foiaEstado||"",enc:c.encargada||""};
+    }));
+    const cnt=k=>k==="todos"?filasTodas.length:filasTodas.filter(f=>f.sis===k).length;
+    const q=expBusq.trim().toLowerCase();
+    const filas=filasTodas.filter(f=>(expFiltro==="todos"||f.sis===expFiltro)&&(!q||`${f.c.nombre} ${f.exp} ${f.tipo} ${f.num} ${f.c.alienNum||""} ${f.enc} ${f.estatus}`.toLowerCase().includes(q)))
+      .sort((a,b)=>{const fa=a.dias!=null&&a.dias>=0,fb=b.dias!=null&&b.dias>=0;if(fa&&fb)return a.dias-b.dias;if(fa)return -1;if(fb)return 1;return (a.c.nombre||"").localeCompare(b.c.nombre||"");});
+    const fmt=f=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(f||"");return m?`${m[2]}/${m[3]}/${m[1]}`:"—";};
+    const th={padding:"11px 14px",fontSize:11.5,fontWeight:700,color:"#fff",textAlign:"left",whiteSpace:"nowrap"};
+    const td={padding:"11px 14px",fontSize:13,color:"#1E293B",borderBottom:"1px solid #E2E8F0",verticalAlign:"middle"};
+    return(
+      <div style={{padding:"26px 30px 34px"}}>
+        <div style={{marginBottom:18}}><div style={{fontSize:25,fontWeight:800,color:"#0F172A"}}>{t("Expedientes","Case files")}</div><div style={{fontSize:13.5,color:"#64748B",marginTop:4}}>{t("Todos los casos migratorios, uno por fila.","All immigration cases, one per row.")}</div></div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:14}}>
+          {[["todos",t("Todos","All")],["uscis","USCIS"],["eoir","EOIR"],["foia","FOIA"]].map(([k,l])=>(
+            <button key={k} onClick={()=>setExpFiltro(k)} style={{padding:"8px 14px",borderRadius:8,border:expFiltro===k?"1px solid #BFDBFE":"1px solid #E2E8F0",background:expFiltro===k?"#EFF6FF":"#fff",color:expFiltro===k?"#1D4ED8":"#475569",fontWeight:expFiltro===k?700:500,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>{l} <span style={{color:"#94A3B8",fontWeight:600}}>{cnt(k)}</span></button>
+          ))}
+          <div style={{flex:"1 1 260px",display:"flex",alignItems:"center",gap:8,border:"1px solid #E2E8F0",background:"#fff",borderRadius:8,padding:"0 12px"}}>
+            <i className="ti ti-search" style={{color:"#94A3B8"}}></i>
+            <input value={expBusq} onChange={e=>setExpBusq(e.target.value)} placeholder={t("Buscar por cliente, tipo de caso, recibo, número A...","Search by client, case type, receipt, A#...")} style={{flex:1,border:"none",outline:"none",fontSize:13,padding:"9px 0",fontFamily:"inherit"}}/>
+          </div>
+        </div>
+        <div style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:12,overflow:"hidden"}}>
+          <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead><tr style={{background:"#1E3A5F"}}>{[t("Expediente","File"),t("Cliente","Client"),t("Sistema","System"),t("Tipo de caso","Case type"),t("Recibo / Tracking","Receipt / Tracking"),t("Próxima fecha","Next date"),t("Estatus","Status"),t("Encargada","Assigned")].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+            <tbody>
+              {filas.length===0&&<tr><td colSpan={8} style={{...td,textAlign:"center",color:"#94A3B8",padding:30}}>{t("No hay expedientes que coincidan.","No matching case files.")}</td></tr>}
+              {filas.slice(0,400).map((f,i)=>{const s=SIS[f.sis]||SIS.uscis;const u=f.dias!=null&&f.dias>=0&&f.dias<=DIAS_URGENTE;return(
+                <tr key={f.k} onClick={()=>abrirCliente(f.c)} style={{background:i%2?"#F8FAFC":"#fff",cursor:"pointer"}}>
+                  <td style={{...td,color:"#2563EB",fontWeight:600,whiteSpace:"nowrap"}}>{f.exp||"—"}</td>
+                  <td style={{...td,fontWeight:700,color:"#1E3A5F"}}>{f.c.nombre}</td>
+                  <td style={td}><span style={{background:s.bg,color:s.c,borderRadius:6,padding:"3px 9px",fontSize:11.5,fontWeight:700}}>{s.l}</span></td>
+                  <td style={td}>{f.tipo}</td>
+                  <td style={{...td,whiteSpace:"nowrap",fontFamily:"ui-monospace,Consolas,monospace",fontSize:12.5}}>{f.num||"—"}</td>
+                  <td style={{...td,whiteSpace:"nowrap"}}>
+                    <div style={{fontWeight:u?800:500,color:u?"#DC2626":f.dias!=null&&f.dias<0?"#94A3B8":"#1E293B"}}>{fmt(f.prox)}</div>
+                    {f.dias!=null&&<div style={{fontSize:11,color:u?"#DC2626":"#94A3B8",fontWeight:u?700:400}}>{cuandoTxt(f.dias)}</div>}
+                  </td>
+                  <td style={{...td,fontSize:12.5,color:"#475569"}}>{f.estatus||"—"}</td>
+                  <td style={{...td,fontSize:12.5,color:"#475569",whiteSpace:"nowrap"}}>{f.enc||"—"}</td>
+                </tr>);})}
+            </tbody>
+          </table>
+          </div>
+          <div style={{padding:"10px 16px",fontSize:12,color:"#94A3B8",borderTop:"1px solid #E2E8F0"}}>{filas.length} {t("expedientes","case files")}{filas.length>400?t(" · mostrando los primeros 400"," · showing first 400"):""} · {t("Haz clic en una fila para abrir el cliente.","Click a row to open the client.")}</div>
+        </div>
+      </div>);
+  };
+
+  const formsNuevos=borradoresPendientes+asiloPendientes+permisoPendientes+foiaPendientes;
   const navItems = [
-    {id:"monitor",   label:t("Casos","Cases"),  icon:"ti-briefcase", onClick:()=>{setActiveNav("monitor");}},
-    {id:"checklist", label:t("Primeros pasos","Getting started"), icon:"ti-rocket", onClick:()=>setShowChecklist(true)},
-    {id:"alertas",   label:t("Alertas","Alerts"),                  icon:"ti-bell", badge: (stats.alertas.length+stats.vencidos.length+stats.eadElegibles.length+solicitudesServicio.length)||null, onClick:()=>setShowAlertas(true)},
-    {id:"pendientes", label:t("Pendientes","To-Do"), icon:"ti-clipboard-list", badge:pendientes.length||null, onClick:()=>setShowPendientes(true)},
-    {id:"dashboard", label:t("Dashboard","Dashboard"),             icon:"ti-chart-bar", badge: isAdmin?(stats.alertas.length+stats.vencidos.length)||null:null, onClick:()=>setShowDashboard(true)},
-    {id:"formularios",label:t("Formularios","Forms"),              icon:"ti-folder", badge:(borradoresPendientes+asiloPendientes+permisoPendientes+foiaPendientes)||null, folder:true, children:[
+    {id:"sec-principal", section:t("Principal","Main")},
+    {id:"inicio",    label:t("Inicio","Home"),        icon:"ti-home", onClick:()=>{}},
+    {id:"calendario",label:t("Calendario","Calendar"),icon:"ti-calendar", onClick:()=>{}},
+    {id:"alertas",   label:t("Alertas","Alerts"),     icon:"ti-bell", badge:urgentes.length||null, badgeGris:!urgentes.length?((stats.vencidos.length+stats.eadElegibles.length+solicitudesServicio.length)||null):null, onClick:()=>setShowAlertas(true)},
+    {id:"pendientes",label:t("Tareas","Tasks"),       icon:"ti-checklist", badgeGris:pendientes.length||null, onClick:()=>setShowPendientes(true)},
+    {id:"sec-clientes", section:t("Clientes","Clients")},
+    {id:"monitor",   label:t("Clientes","Clients"),   icon:"ti-address-book", onClick:()=>{}},
+    {id:"expedientes",label:t("Expedientes","Case files"),icon:"ti-briefcase", onClick:()=>{}},
+    {id:"formularios",label:t("Formularios","Forms"), icon:"ti-folder", badgeGris:formsNuevos||null, folder:true, children:[
       {id:"f-asilo", label:t("Asilo (I-589)","Asylum (I-589)"), badge:asiloPendientes||null, onClick:()=>{setFormTipo("ASILO");setAsiloAbierto(null);setShowAsiloNew(true);loadAsilo();}},
       {id:"f-permiso", label:t("Permiso de trabajo (I-765)","Work permit (I-765)"), badge:permisoPendientes||null, onClick:()=>{setFormTipo("PERMISO");setAsiloAbierto(null);setShowAsiloNew(true);loadAsilo();}},
       {id:"f-foia", label:"F.O.I.A", badge:foiaPendientes||null, onClick:()=>{setFormTipo("FOIA");setAsiloAbierto(null);setShowAsiloNew(true);loadAsilo();}},
@@ -1994,15 +2233,18 @@ const loadTeam=async()=>{
         {id:"f-"+tipo, label, badge:borradores.filter(b=>b.tipoFormulario===tipo&&(b.estado==="borrador"||!b.estado)).length||null, onClick:()=>{setBorradoresFiltro(tipo);setShowBorradores(true);loadBorradores();}})),
       {id:"f-todos", label:t("Ver todos","View all"), badge:null, onClick:()=>{setBorradoresFiltro("");setShowBorradores(true);loadBorradores();}},
     ]},
-    {id:"pagos",     label:t("Pagos","Payments"),                  icon:"ti-credit-card", show:isAdmin, onClick:()=>setShowPagosReporte(true)},
-    {id:"equipo",    label:t("Equipo","Team"),                     icon:"ti-users", show:isAdmin, onClick:()=>{setShowTeam(true);loadOfficeUsers();}},
-    {id:"usuarios",  label:t("Usuarios","Users"),                  icon:"ti-lock", show:isAdmin, onClick:()=>setShowAddUser(true)},
-    {id:"reportes",  label:t("Reportes","Reports"),                icon:"ti-chart-line", show:isAdmin, onClick:()=>setShowReportesMenu(true)},
+    {id:"sec-oficina", section:t("Oficina","Office"), show:isAdmin},
+    {id:"pagos",     label:t("Pagos","Payments"),     icon:"ti-credit-card", show:isAdmin, onClick:()=>setShowPagosReporte(true)},
+    {id:"reportes",  label:t("Reportes","Reports"),   icon:"ti-chart-line", show:isAdmin, onClick:()=>setShowReportesMenu(true)},
+    {id:"sec-admin", section:t("Administración","Administration"), show:isAdmin},
+    {id:"equipo",    label:t("Equipo","Team"),        icon:"ti-users", show:isAdmin, onClick:()=>{setShowTeam(true);loadOfficeUsers();}},
+    {id:"usuarios",  label:t("Usuarios","Users"),     icon:"ti-lock", show:isAdmin, onClick:()=>setShowAddUser(true)},
     {id:"sec-herramientas", section:t("Herramientas","Tools")},
     {id:"uscis",     label:t("Verificador USCIS","USCIS Checker")+(uscisHabilitado?"":" 🔒"), icon:"ti-search", onClick:()=>{setShowUSCIS(true);if(uscisHabilitado)loadCasosUscis();}},
     {id:"envios",    label:t("Control de envíos","Shipments")+(enviosHabilitado?"":" 🔒"), icon:"ti-package", onClick:()=>{setShowEnvios(true);if(enviosHabilitado)loadEnvios();}},
     {id:"sec-sistema", section:t("Sistema","System"), show:isAdmin},
-    {id:"config",    label:t("Configuración","Settings"),          icon:"ti-settings", show:isAdmin, onClick:()=>setShowPagosConfig(true)},
+    {id:"config",    label:t("Configuración","Settings"), icon:"ti-settings", show:isAdmin, onClick:()=>setShowPagosConfig(true)},
+    {id:"checklist", label:t("Primeros pasos","Getting started"), icon:"ti-rocket", sub:true, show:isAdmin, onClick:()=>setShowChecklist(true)},
   ];
 
   return(<div style={{fontFamily:"'Segoe UI',Inter,system-ui,sans-serif",minHeight:"100vh",background:"#F8FAFC",display:"flex"}}>
@@ -2030,7 +2272,7 @@ const loadTeam=async()=>{
               <button onClick={()=>setFormsOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 20px",background:active?"#EFF6FF":"transparent",border:"none",borderLeft:active?"3px solid #2563EB":"3px solid transparent",color:active?"#2563EB":"#64748B",fontSize:13,fontWeight:active?600:400,cursor:"pointer",textAlign:"left",fontFamily:"inherit"}}>
                 <i className={`ti ${formsOpen?"ti-folder-open":"ti-folder"}`} style={{fontSize:16,width:18,textAlign:"center",flexShrink:0}}></i>
                 <span style={{flex:1}}>{n.label}</span>
-                {!formsOpen&&n.badge>0&&<span style={{background:"#EF4444",color:"#fff",borderRadius:20,padding:"1px 6px",fontSize:10,fontWeight:700,minWidth:18,textAlign:"center"}}>{n.badge}</span>}
+                {!formsOpen&&n.badgeGris>0&&<span style={{background:"#F1F5F9",color:"#64748B",borderRadius:20,padding:"1px 6px",fontSize:10,fontWeight:700,minWidth:18,textAlign:"center"}}>{n.badgeGris}</span>}
                 <i className={`ti ${formsOpen?"ti-chevron-down":"ti-chevron-right"}`} style={{fontSize:14}}></i>
               </button>
               {formsOpen&&n.children.map(c=>{
@@ -2043,7 +2285,8 @@ const loadTeam=async()=>{
               })}
             </div>
           );
-          const handleClick = ()=>{ setActiveNav(n.id); n.onClick&&n.onClick(); };
+          const VISTAS=["inicio","calendario","monitor","expedientes"];
+          const handleClick = ()=>{ if(VISTAS.includes(n.id)){setActiveNav(n.id);window.scrollTo(0,0);} n.onClick&&n.onClick(); };
           if(n.href) return(
             <a key={n.id} href={n.href} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 20px",textDecoration:"none",color:active?"#2563EB":"#64748B",background:active?"#EFF6FF":"transparent",borderLeft:active?"3px solid #2563EB":"3px solid transparent",fontSize:13,fontWeight:active?600:400,transition:"all 0.15s"}}>
               <i className={`ti ${n.icon}`} style={{fontSize:16,width:18,textAlign:"center",flexShrink:0}}></i>
@@ -2051,10 +2294,11 @@ const loadTeam=async()=>{
             </a>
           );
           return(
-            <button key={n.id} onClick={handleClick} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 20px",background:active?"#EFF6FF":"transparent",border:"none",borderLeft:active?"3px solid #2563EB":"3px solid transparent",color:active?"#2563EB":"#64748B",fontSize:13,fontWeight:active?600:400,cursor:"pointer",textAlign:"left",position:"relative",transition:"all 0.15s"}}>
+            <button key={n.id} onClick={handleClick} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:n.sub?"6px 20px 6px 48px":"10px 20px",background:active?"#EFF6FF":"transparent",border:"none",borderLeft:active?"3px solid #2563EB":"3px solid transparent",color:active?"#2563EB":"#64748B",fontSize:n.sub?12.5:13,fontWeight:active?600:400,cursor:"pointer",textAlign:"left",position:"relative",transition:"all 0.15s"}}>
               <i className={`ti ${n.icon}`} style={{fontSize:16,width:18,textAlign:"center",flexShrink:0}}></i>
               <span style={{flex:1}}>{n.label}</span>
               {n.badge>0&&<span style={{background:"#EF4444",color:"#fff",borderRadius:20,padding:"1px 6px",fontSize:10,fontWeight:700,minWidth:18,textAlign:"center"}}>{n.badge}</span>}
+              {!(n.badge>0)&&n.badgeGris>0&&<span style={{background:"#F1F5F9",color:"#64748B",borderRadius:20,padding:"1px 6px",fontSize:10,fontWeight:700,minWidth:18,textAlign:"center"}}>{n.badgeGris}</span>}
             </button>
           );
         })}
@@ -2091,10 +2335,11 @@ const loadTeam=async()=>{
       </div>
     </div>
     <div style={{marginLeft:240,flex:1,minWidth:0}}>
+      {activeNav==="inicio"?renderInicio():activeNav==="calendario"?renderCalendarioPagina():activeNav==="expedientes"?renderExpedientes():<>
       <div style={{background:"#F8FAFC",padding:"24px 24px 16px",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
         <div style={{minWidth:220,flex:"1 1 260px"}}>
-          <div style={{fontSize:26,fontWeight:800,color:"#0F172A",letterSpacing:"-0.02em"}}>{t("Gestión de casos","Case management")}</div>
-          <div style={{fontSize:13,color:"#64748B",marginTop:3}}>{t("Administra expedientes, fechas, pagos y seguimiento migratorio desde un solo lugar.","Manage files, dates, payments and immigration tracking from one place.")}</div>
+          <div style={{fontSize:26,fontWeight:800,color:"#0F172A",letterSpacing:"-0.02em"}}>{t("Clientes","Clients")}</div>
+          <div style={{fontSize:13,color:"#64748B",marginTop:3}}>{t("Directorio de clientes, sus datos de contacto y sus casos.","Client directory, contact details and cases.")}</div>
         </div>
         <div style={{display:"flex",gap:10,alignItems:"stretch",flexWrap:"wrap",flexShrink:0}}>
           <div style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:10,padding:"8px 16px",display:"flex",alignItems:"center",gap:9}}>
@@ -2169,7 +2414,7 @@ const loadTeam=async()=>{
       </div>
       <div style={{padding:"32px 32px 48px"}}>
 
-      {!loading&&!busquedaActiva&&showBanners&&(stats.vencidos.length>0||stats.alertas1dia.length>0||stats.alertas3dias.length>0)&&(
+      {false&&!loading&&!busquedaActiva&&showBanners&&(stats.vencidos.length>0||stats.alertas1dia.length>0||stats.alertas3dias.length>0)&&(
         <div style={{marginBottom:16,borderRadius:12,overflow:"hidden",border:"1px solid #FECACA",background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
           {stats.vencidos.length>0&&(
             <div style={{background:"#FEF2F2",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,borderBottom:stats.alertas1dia.length>0||stats.alertas3dias.length>0?"1px solid #FECACA":"none"}}>
@@ -2981,6 +3226,7 @@ const loadTeam=async()=>{
         </div>
       )}
       </div>
+    </>}
     </div>
 
     
