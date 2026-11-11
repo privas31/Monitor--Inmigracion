@@ -452,7 +452,7 @@ function App(){
   const[showAsiloNew,setShowAsiloNew]=useState(false);
   const[asiloSubs,setAsiloSubs]=useState([]);const[asiloLoading,setAsiloLoading]=useState(false);
   const[asiloTab,setAsiloTab]=useState("pendientes");const[asiloAbierto,setAsiloAbierto]=useState(null);
-  const[asiloVincular,setAsiloVincular]=useState("");
+  const[asiloVincular,setAsiloVincular]=useState("");const[formTipo,setFormTipo]=useState("ASILO");
 
   const[showPagosConfig,setShowPagosConfig]=useState(false);
   const[showCobrar,setShowCobrar]=useState(false);
@@ -1203,7 +1203,7 @@ const loadTeam=async()=>{
       const snap=await getDocs(q);
       const officeId2=officeData?.id||userData?.officeId;
       // Solo mostrar formularios de esta oficina (con officeId correcto)
-      const all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(b=>(!b.officeId||b.officeId===officeId2)&&b.tipoFormulario!=="ASILO");
+      const all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(b=>(!b.officeId||b.officeId===officeId2)&&!["ASILO","PERMISO"].includes(b.tipoFormulario));
       setBorradores(all);
       setBorradoresPendientes(all.filter(b=>b.estado==="borrador"||!b.estado).length);
     }catch(e){
@@ -1211,7 +1211,7 @@ const loadTeam=async()=>{
         const{db,collection,getDocs}=window._firebase;
         const snap=await getDocs(collection(db,"borradores"));
         const officeId3=officeData?.id||userData?.officeId;
-        const all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(b=>(!b.officeId||b.officeId===officeId3)&&b.tipoFormulario!=="ASILO");
+        const all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(b=>(!b.officeId||b.officeId===officeId3)&&!["ASILO","PERMISO"].includes(b.tipoFormulario));
         setBorradores(all);setBorradoresPendientes(all.filter(b=>b.estado==="borrador"||!b.estado).length);
       }catch(e2){}
     }
@@ -1239,12 +1239,17 @@ const loadTeam=async()=>{
 
   // ── FORMA ASILO NEW ─────────────────────────────────────────────────────────
   const ASILO_META=["tipoFormulario","labelFormulario","estado","fechaEnvio","fuente","officeId","clienteId","procesadoEn","procesadoPor","_secciones","notificado","notificadoEn"];
-  const asiloLink="https://asilo.immigpath.com";
+  const FORMS_LINK={
+    ASILO:{titulo:"Formulario de Asilo (I-589)",icono:"🛡️",link:"https://asilo.immigpath.com",caso:"I-589 Asilo",campo:"formAsilo",wa:"su formulario de asilo"},
+    PERMISO:{titulo:"Permiso de Trabajo (I-765)",icono:"💼",link:"https://formularios.immigpath.com/permiso",caso:"I-765 Permiso de trabajo",campo:"formPermiso",wa:"su formulario de permiso de trabajo"},
+  };
+  const formCfg=FORMS_LINK[formTipo]||FORMS_LINK.ASILO;
+  const asiloLink=formCfg.link;
   const loadAsilo=async()=>{
     setAsiloLoading(true);
     try{
       const{db,collection,getDocs,query,where}=window._firebase;
-      const snap=await getDocs(query(collection(db,"borradores"),where("tipoFormulario","==","ASILO")));
+      const snap=await getDocs(query(collection(db,"borradores"),where("tipoFormulario","in",Object.keys(FORMS_LINK))));
       const all=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.fechaEnvio||"").localeCompare(a.fechaEnvio||""));
       setAsiloSubs(all);
     }catch(e){console.error("loadAsilo:",e);}
@@ -1264,29 +1269,30 @@ const loadTeam=async()=>{
       const ref=await addDoc(collection(db,"clientes"),{
         nombre:b.nombre||"",paisOrigen:b.paisOrigen||"",alienNum:b.alienNum||"",
         telefono:b.telefono||"",email:b.email||"",encargada:"",officeId,
-        casos:[{...emptyCaso,sistema:"uscis",tipoCaso:"I-589 Asilo",alienNum:b.alienNum||""}],
-        formAsilo:{fechaEnvio:b.fechaEnvio||"",borradorId:b.id,respuestas:asiloRespuestas(b)},
-        nota:`Forma de Asilo recibida el ${b.fechaEnvio?new Date(b.fechaEnvio).toLocaleDateString("es-MX"):"—"}.`,
+        casos:[{...emptyCaso,sistema:"uscis",tipoCaso:(FORMS_LINK[b.tipoFormulario]||FORMS_LINK.ASILO).caso,alienNum:b.alienNum||""}],
+        [(FORMS_LINK[b.tipoFormulario]||FORMS_LINK.ASILO).campo]:{fechaEnvio:b.fechaEnvio||"",borradorId:b.id,respuestas:asiloRespuestas(b)},
+        nota:`${(FORMS_LINK[b.tipoFormulario]||FORMS_LINK.ASILO).titulo} recibido el ${b.fechaEnvio?new Date(b.fechaEnvio).toLocaleDateString("es-MX"):"—"}.`,
         createdAt:new Date().toISOString(),createdBy:user.email,fromIntake:true
       });
       await marcarAsiloProcesado(b,ref.id);
-      loadCases();showToastFn("✅ Cliente creado desde la Forma de Asilo");
+      loadCases();showToastFn("✅ Cliente creado desde el formulario");
     }catch(e){console.error(e);showToastFn("Error al crear el cliente","error");}
   };
   const vincularAsilo=async(b,clienteId)=>{
     if(!clienteId)return;
     try{
       const{db,doc,updateDoc}=window._firebase;
-      await updateDoc(doc(db,"clientes",clienteId),{formAsilo:{fechaEnvio:b.fechaEnvio||"",borradorId:b.id,respuestas:asiloRespuestas(b)},updatedAt:new Date().toISOString(),updatedBy:user.email});
+      await updateDoc(doc(db,"clientes",clienteId),{[(FORMS_LINK[b.tipoFormulario]||FORMS_LINK.ASILO).campo]:{fechaEnvio:b.fechaEnvio||"",borradorId:b.id,respuestas:asiloRespuestas(b)},updatedAt:new Date().toISOString(),updatedBy:user.email});
       await marcarAsiloProcesado(b,clienteId);
-      setAsiloVincular("");loadCases();showToastFn("✅ Forma de Asilo vinculada al cliente");
+      setAsiloVincular("");loadCases();showToastFn("✅ Formulario vinculado al cliente");
     }catch(e){console.error(e);showToastFn("Error al vincular","error");}
   };
   const eliminarAsilo=async(b)=>{
-    if(!window.confirm(`¿Eliminar la Forma de Asilo de ${b.nombre||"este cliente"}? Esta acción no se puede deshacer.`))return;
+    if(!window.confirm(`¿Eliminar el formulario de ${b.nombre||"este cliente"}? Esta acción no se puede deshacer.`))return;
     try{const{db,doc,deleteDoc}=window._firebase;await deleteDoc(doc(db,"borradores",b.id));setAsiloSubs(prev=>prev.filter(x=>x.id!==b.id));setAsiloAbierto(null);showToastFn("Forma eliminada");}catch(e){showToastFn("Error al eliminar","error");}
   };
-  const asiloPendientes=asiloSubs.filter(b=>b.estado!=="procesado").length;
+  const pendientesDe=tipo=>asiloSubs.filter(b=>(b.tipoFormulario||"ASILO")===tipo&&b.estado!=="procesado").length;
+  const asiloPendientes=pendientesDe("ASILO");const permisoPendientes=pendientesDe("PERMISO");
 
   const rechazarBorrador=async(id)=>{
     try{const{db,doc,deleteDoc}=window._firebase;await deleteDoc(doc(db,"borradores",id));setBorradores(prev=>prev.filter(x=>x.id!==id));setBorradoresPendientes(prev=>Math.max(0,prev-1));showToastFn("Borrador eliminado");}catch(e){showToastFn("Error","error");}
@@ -1917,9 +1923,10 @@ const loadTeam=async()=>{
     {id:"alertas",   label:t("Alertas","Alerts"),                  icon:"ti-bell", badge: (stats.alertas.length+stats.vencidos.length+stats.eadElegibles.length+solicitudesServicio.length)||null, onClick:()=>setShowAlertas(true)},
     {id:"pendientes", label:t("Pendientes","To-Do"), icon:"ti-clipboard-list", badge:pendientes.length||null, onClick:()=>setShowPendientes(true)},
     {id:"dashboard", label:t("Dashboard","Dashboard"),             icon:"ti-chart-bar", badge: isAdmin?(stats.alertas.length+stats.vencidos.length)||null:null, onClick:()=>setShowDashboard(true)},
-    {id:"formularios",label:t("Formularios","Forms"),              icon:"ti-folder", badge:(borradoresPendientes+asiloPendientes)||null, folder:true, children:[
-      {id:"f-asilo", label:t("Asilo (I-589)","Asylum (I-589)"), badge:asiloPendientes||null, onClick:()=>{setShowAsiloNew(true);loadAsilo();}},
-      ...[["I-765",t("Permiso de trabajo (I-765)","Work permit (I-765)")],["I-485",t("Ajuste de estatus (I-485)","Adjustment (I-485)")],["I-130",t("Petición familiar (I-130)","Family petition (I-130)")]].map(([tipo,label])=>(
+    {id:"formularios",label:t("Formularios","Forms"),              icon:"ti-folder", badge:(borradoresPendientes+asiloPendientes+permisoPendientes)||null, folder:true, children:[
+      {id:"f-asilo", label:t("Asilo (I-589)","Asylum (I-589)"), badge:asiloPendientes||null, onClick:()=>{setFormTipo("ASILO");setAsiloAbierto(null);setShowAsiloNew(true);loadAsilo();}},
+      {id:"f-permiso", label:t("Permiso de trabajo (I-765)","Work permit (I-765)"), badge:permisoPendientes||null, onClick:()=>{setFormTipo("PERMISO");setAsiloAbierto(null);setShowAsiloNew(true);loadAsilo();}},
+      ...[["I-485",t("Ajuste de estatus (I-485)","Adjustment (I-485)")],["I-130",t("Petición familiar (I-130)","Family petition (I-130)")]].map(([tipo,label])=>(
         {id:"f-"+tipo, label, badge:borradores.filter(b=>b.tipoFormulario===tipo&&(b.estado==="borrador"||!b.estado)).length||null, onClick:()=>{setBorradoresFiltro(tipo);setShowBorradores(true);loadBorradores();}})),
       {id:"f-todos", label:t("Ver todos","View all"), badge:null, onClick:()=>{setBorradoresFiltro("");setShowBorradores(true);loadBorradores();}},
     ]},
@@ -4106,8 +4113,9 @@ const loadTeam=async()=>{
 
     {/* ── FORMA ASILO NEW ────────────────────────────────────────────────── */}
     {showAsiloNew&&(()=>{
-      const lista=asiloSubs.filter(b=>asiloTab==="pendientes"?b.estado!=="procesado":b.estado==="procesado");
-      const msgWA=`Hola, por favor llene su formulario de asilo desde su teléfono en este enlace: ${asiloLink}`;
+      const delTipo=asiloSubs.filter(b=>(b.tipoFormulario||"ASILO")===formTipo);
+      const lista=delTipo.filter(b=>asiloTab==="pendientes"?b.estado!=="procesado":b.estado==="procesado");
+      const msgWA=`Hola, por favor llene ${formCfg.wa} desde su teléfono en este enlace: ${asiloLink}`;
       const etiqueta=k=>k.replace(/_/g," ").replace(/([a-z])([A-Z])/g,"$1 $2").replace(/^./,m=>m.toUpperCase());
       const valor=v=>Array.isArray(v)?(v.length?v.map(x=>typeof x==="object"?Object.values(x).filter(Boolean).join(" · "):x).join("\n"):"—"):(typeof v==="object"&&v!==null?Object.entries(v).map(([a,b])=>`${a}: ${b}`).join("\n"):(v===true?"Sí":v===false?"No":(v||"—")));
       return(
@@ -4115,8 +4123,8 @@ const loadTeam=async()=>{
         <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:1000,boxShadow:"0 24px 80px rgba(0,0,0,0.35)",overflow:"hidden"}}>
           <div style={{background:"linear-gradient(135deg,#0F172A 0%,#1E3A6E 100%)",padding:"20px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
             <div style={{fontSize:20,fontWeight:800,color:"#fff",display:"flex",alignItems:"center",gap:10}}>
-              🛡️ Forma Asilo New
-              {asiloPendientes>0&&<span style={{background:"#EF4444",color:"#fff",borderRadius:20,padding:"2px 9px",fontSize:12,fontWeight:700}}>{asiloPendientes} nueva(s)</span>}
+              {formCfg.icono} {formCfg.titulo}
+              {pendientesDe(formTipo)>0&&<span style={{background:"#EF4444",color:"#fff",borderRadius:20,padding:"2px 9px",fontSize:12,fontWeight:700}}>{pendientesDe(formTipo)} nueva(s)</span>}
             </div>
             <div style={{display:"flex",gap:8}}>
               <button onClick={loadAsilo} disabled={asiloLoading} style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,color:"#fff",padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>{asiloLoading?"⏳ Cargando...":"🔄 Actualizar"}</button>
@@ -4137,7 +4145,7 @@ const loadTeam=async()=>{
           <div style={{display:"flex",gap:6,padding:"12px 24px 0"}}>
             {[["pendientes","Nuevas"],["procesadas","Procesadas"]].map(([k,l])=>(
               <button key={k} onClick={()=>{setAsiloTab(k);setAsiloAbierto(null);}} style={{padding:"8px 16px",borderRadius:"8px 8px 0 0",border:"1px solid #E2E8F0",borderBottom:asiloTab===k?"2px solid #2563EB":"1px solid #E2E8F0",background:asiloTab===k?"#EFF6FF":"#fff",fontWeight:700,fontSize:13,cursor:"pointer",color:asiloTab===k?"#1D4ED8":"#64748B"}}>
-                {l} ({asiloSubs.filter(b=>k==="pendientes"?b.estado!=="procesado":b.estado==="procesado").length})
+                {l} ({delTipo.filter(b=>k==="pendientes"?b.estado!=="procesado":b.estado==="procesado").length})
               </button>
             ))}
           </div>
