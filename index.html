@@ -77,7 +77,7 @@
       }
     })();
   </script>
-  <style>* { box-sizing:border-box; margin:0; padding:0; } body { font-family:'Segoe UI',Inter,sans-serif; background:#F1F5F9; } ::-webkit-scrollbar{width:6px} ::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}</style>
+  <style>.cal-dia .cal-mas{opacity:0;transition:opacity .15s}.cal-dia:hover .cal-mas{opacity:1}.cal-dia:hover{box-shadow:inset 0 0 0 1px #DBEAFE}* { box-sizing:border-box; margin:0; padding:0; } body { font-family:'Segoe UI',Inter,sans-serif; background:#F1F5F9; } ::-webkit-scrollbar{width:6px} ::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}</style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css"/>
 </head>
 <body>
@@ -447,7 +447,7 @@ function App(){
   // ── Forma Asilo New + Reporte de Asilo ──
   const[showReportesMenu,setShowReportesMenu]=useState(false);
   const[formsOpen,setFormsOpen]=useState(false);const[borradoresFiltro,setBorradoresFiltro]=useState("");
-  const[showReporteAsilo,setShowReporteAsilo]=useState(false);const[reporteTipo,setReporteTipo]=useState("asilo");const[calRef,setCalRef]=useState(()=>new Date());const[calVista,setCalVista]=useState("mes");const[inicioBusq,setInicioBusq]=useState("");const[expBusq,setExpBusq]=useState("");const[expFiltro,setExpFiltro]=useState("todos");const[raSel,setRaSel]=useState("");
+  const[showReporteAsilo,setShowReporteAsilo]=useState(false);const[reporteTipo,setReporteTipo]=useState("asilo");const[calRef,setCalRef]=useState(()=>new Date());const[calVista,setCalVista]=useState("mes");const[inicioBusq,setInicioBusq]=useState("");const[expBusq,setExpBusq]=useState("");const[expFiltro,setExpFiltro]=useState("todos");const[notasCal,setNotasCal]=useState([]);const[notaEdit,setNotaEdit]=useState(null);const[notaGuardando,setNotaGuardando]=useState(false);const[raSel,setRaSel]=useState("");
   const[raBusq,setRaBusq]=useState("");const[raPais,setRaPais]=useState("");
   const[raDesde,setRaDesde]=useState("");const[raHasta,setRaHasta]=useState("");
   const[showAsiloNew,setShowAsiloNew]=useState(false);
@@ -531,7 +531,7 @@ function App(){
     });
   },[]);
 
-  useEffect(()=>{if(!user||!officeData)return;loadCases();loadTeam();loadBorradores();loadAsilo();loadPagosConfig();loadSolicitudesServicio();loadAlertasEoir();},[user,officeData]);
+  useEffect(()=>{if(!user||!officeData)return;loadCases();loadTeam();loadBorradores();loadAsilo();loadNotasCal();loadPagosConfig();loadSolicitudesServicio();loadAlertasEoir();},[user,officeData]);
   useEffect(()=>{ window._officeData = officeData; window._userData = userData; },[officeData, userData]);
 
   // Heartbeat: actualizar "última actividad" cada 2 minutos mientras el usuario está activo
@@ -1190,6 +1190,35 @@ const loadTeam=async()=>{
     }
   };
 
+  // ── Notas del calendario ──
+  const loadNotasCal=async()=>{
+    try{
+      const{db,collection,getDocs}=window._firebase;
+      const oid=officeData?.id||userData?.officeId||"";
+      const snap=await getDocs(collection(db,"notasCalendario"));
+      setNotasCal(snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>!n.officeId||n.officeId===oid));
+    }catch(e){console.error("loadNotasCal:",e);}
+  };
+  const guardarNota=async()=>{
+    const n=notaEdit;if(!n)return;
+    const texto=(n.texto||"").trim();
+    if(!texto||!/^\d{4}-\d{2}-\d{2}$/.test(n.fecha||"")){showToastFn(t("Escribe la nota y la fecha","Write the note and the date"),"error");return;}
+    setNotaGuardando(true);
+    try{
+      const{db,collection,addDoc,doc,updateDoc}=window._firebase;
+      const data={fecha:n.fecha,hora:n.hora||"",texto,officeId:officeData?.id||userData?.officeId||"",actualizadoEn:new Date().toISOString(),actualizadoPor:user.email};
+      if(n.id){await updateDoc(doc(db,"notasCalendario",n.id),data);setNotasCal(prev=>prev.map(x=>x.id===n.id?{...x,...data}:x));}
+      else{const ref=await addDoc(collection(db,"notasCalendario"),{...data,creadoEn:data.actualizadoEn,creadoPor:user.email});setNotasCal(prev=>[...prev,{id:ref.id,...data}]);}
+      setNotaEdit(null);showToastFn(t("📝 Nota guardada","📝 Note saved"));
+    }catch(e){console.error(e);showToastFn(t("Error al guardar la nota","Error saving note"),"error");}
+    setNotaGuardando(false);
+  };
+  const borrarNota=async()=>{
+    const n=notaEdit;if(!n||!n.id)return;
+    if(!window.confirm(t("¿Borrar esta nota?","Delete this note?")))return;
+    try{const{db,doc,deleteDoc}=window._firebase;await deleteDoc(doc(db,"notasCalendario",n.id));setNotasCal(prev=>prev.filter(x=>x.id!==n.id));setNotaEdit(null);showToastFn(t("Nota borrada","Note deleted"));}
+    catch(e){showToastFn(t("Error al borrar","Error deleting"),"error");}
+  };
   const loadBorradores=async()=>{
     setBorradoresLoading(true);
     try{
@@ -1989,10 +2018,12 @@ const loadTeam=async()=>{
     bio:{label:t("Biométricos","Biometrics"),bg:"#F0F9FF",color:"#075985",bd:"#0EA5E9"},
     ent:{label:t("Entrevista","Interview"),bg:"#F5F3FF",color:"#5B21B6",bd:"#8B5CF6"},
     ead:{label:t("Vence EAD","EAD expires"),bg:"#F8FAFC",color:"#334155",bd:"#94A3B8"},
+    nota:{label:t("Nota","Note"),bg:"#FEF9C3",color:"#713F12",bd:"#EAB308"},
   };
   const EV_URG={bg:"#FEF2F2",color:"#B91C1C",bd:"#DC2626"};
   const EV_PAS={bg:"#F8FAFC",color:"#94A3B8",bd:"#E2E8F0"};
   const DIAS_URGENTE=3;
+  const fmtHora=h=>{const m=/^(\d{1,2}):(\d{2})/.exec(h||"");if(!m)return h||"";let H=+m[1];const ap=H>=12?"PM":"AM";H=H%12||12;return `${H}:${m[2]} ${ap}`;};
   const eventosOficina=(()=>{
     const ev=[];
     clientes.forEach(c=>{
@@ -2007,22 +2038,25 @@ const loadTeam=async()=>{
         if(ca.tieneEAD==="si"&&ca.eadVence)ev.push({k:k+"d",f:ca.eadVence,tipo:"ead",c,ca,det:ca.eadRenovado==="si"?t("Renovado","Renewed"):t("Renovación pendiente","Renewal pending")});
       });
     });
-    return ev.filter(e=>/^\d{4}-\d{2}-\d{2}/.test(e.f)).map(e=>({...e,f:e.f.slice(0,10),d:getDias(e.f.slice(0,10))})).sort((a,b)=>a.f.localeCompare(b.f));
+    notasCal.forEach(n=>{if(n.fecha)ev.push({k:"n-"+n.id,f:n.fecha,tipo:"nota",nota:n,det:n.hora?fmtHora(n.hora):t("Nota","Note")});});
+    return ev.filter(e=>/^\d{4}-\d{2}-\d{2}/.test(e.f)).map(e=>({...e,f:e.f.slice(0,10),d:getDias(e.f.slice(0,10))})).sort((a,b)=>a.f.localeCompare(b.f)||(a.tipo==="nota"?1:0)-(b.tipo==="nota"?1:0));
   })();
-  const esUrgente=e=>e.d!=null&&e.d>=0&&e.d<=DIAS_URGENTE&&!(e.tipo==="ead"&&e.ca.eadRenovado==="si");
+  const esUrgente=e=>e.tipo!=="nota"&&e.d!=null&&e.d>=0&&e.d<=DIAS_URGENTE&&!(e.tipo==="ead"&&e.ca.eadRenovado==="si");
   const urgentes=eventosOficina.filter(esUrgente);
-  const estiloEv=e=>e.d<0?EV_PAS:esUrgente(e)?EV_URG:TIPO_EV[e.tipo];
+  const estiloEv=e=>e.tipo==="nota"?TIPO_EV.nota:e.d<0?EV_PAS:esUrgente(e)?EV_URG:TIPO_EV[e.tipo];
   const cuandoTxt=d=>d===0?t("Hoy","Today"):d===1?t("Mañana","Tomorrow"):d<0?t(`Hace ${-d} días`,`${-d} days ago`):t(`En ${d} días`,`In ${d} days`);
   const MESES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
   const MESES_C=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
   const DIAS_S=[t("Dom","Sun"),t("Lun","Mon"),t("Mar","Tue"),t("Mié","Wed"),t("Jue","Thu"),t("Vie","Fri"),t("Sáb","Sat")];
   const abrirCliente=c=>{if(c)openEdit(c);};
+  const abrirEv=e=>{if(e.tipo==="nota")setNotaEdit({...e.nota});else abrirCliente(e.c);};
+  const tituloEv=e=>e.tipo==="nota"?(e.nota.hora?fmtHora(e.nota.hora)+" · ":"")+e.nota.texto:`${TIPO_EV[e.tipo].label} · ${nombreCorto(e.c.nombre)}`;
 
   const ChipEv=({e,grande})=>{const st=estiloEv(e);return(
-    <div onClick={ev=>{ev.stopPropagation();abrirCliente(e.c);}} title={`${TIPO_EV[e.tipo].label} — ${e.c.nombre}${e.det?" · "+e.det:""}`}
+    <div onClick={ev=>{ev.stopPropagation();abrirEv(e);}} title={e.tipo==="nota"?e.nota.texto:`${TIPO_EV[e.tipo].label} — ${e.c.nombre}${e.det?" · "+e.det:""}`}
       style={{fontSize:grande?12:10.5,lineHeight:1.3,padding:grande?"5px 8px":"3px 6px",borderRadius:5,marginBottom:3,borderLeft:"3px solid "+st.bd,background:st.bg,color:st.color,fontWeight:esUrgente(e)?700:500,cursor:"pointer",wordBreak:"break-word"}}>
-      {e.d<0&&"✓ "}{TIPO_EV[e.tipo].label} · {nombreCorto(e.c.nombre)}
-      {grande&&e.det&&<div style={{fontSize:11,fontWeight:400,opacity:.85,marginTop:1}}>{e.det}</div>}
+      {e.tipo==="nota"?<>📝 {grande?tituloEv(e):(tituloEv(e).length>38?tituloEv(e).slice(0,36)+"…":tituloEv(e))}</>:<>{e.d<0&&"✓ "}{tituloEv(e)}</>}
+      {grande&&e.det&&e.tipo!=="nota"&&<div style={{fontSize:11,fontWeight:400,opacity:.85,marginTop:1}}>{e.det}</div>}
     </div>);};
 
   const renderCalendario=({alto})=>{
@@ -2041,6 +2075,7 @@ const loadTeam=async()=>{
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 18px",borderBottom:"1px solid #F1F5F9",gap:10,flexWrap:"wrap"}}>
           <div><div style={{fontSize:15,fontWeight:700,color:"#1E3A5F"}}>{t("Calendario de la oficina","Office calendar")}</div><div style={{fontSize:11.5,color:"#94A3B8",marginTop:2}}>{titulo}</div></div>
           <div style={{display:"flex",gap:6}}>
+            <button style={{...btn(false),background:"#FEF9C3",borderColor:"#FDE68A",color:"#713F12",fontWeight:600}} onClick={()=>setNotaEdit({fecha:toISO(new Date()),hora:"",texto:""})}>📝 {t("Nota","Note")}</button>
             <button style={btn(calVista==="mes")} onClick={()=>setCalVista("mes")}>{t("Mes","Month")}</button>
             <button style={btn(calVista==="semana")} onClick={()=>setCalVista("semana")}>{t("Semana","Week")}</button>
             <button style={btn(false)} onClick={()=>mover(-1)}><i className="ti ti-chevron-left"></i></button>
@@ -2058,10 +2093,11 @@ const loadTeam=async()=>{
             const iso=toISO(d),otro=calVista==="mes"&&d.getMonth()!==ref.getMonth(),esHoy=iso===hoyIso;
             const evs=porDia[iso]||[];
             return(
-              <div key={iso} style={{minHeight:calVista==="semana"?(alto?420:300):(alto?110:92),minWidth:0,borderTop:"1px solid #F1F5F9",borderLeft:"1px solid #F1F5F9",borderRight:i%7===6?"1px solid #F1F5F9":"none",borderBottom:i>=dias.length-7?"1px solid #F1F5F9":"none",padding:6,background:esHoy?"#F8FBFF":"transparent"}}>
+              <div key={iso} onClick={()=>!otro&&setNotaEdit({fecha:iso,hora:"",texto:""})} title={otro?"":t("Clic para agregar una nota","Click to add a note")} className="cal-dia" style={{cursor:otro?"default":"pointer",minHeight:calVista==="semana"?(alto?420:300):(alto?110:92),minWidth:0,borderTop:"1px solid #F1F5F9",borderLeft:"1px solid #F1F5F9",borderRight:i%7===6?"1px solid #F1F5F9":"none",borderBottom:i>=dias.length-7?"1px solid #F1F5F9":"none",padding:6,background:esHoy?"#F8FBFF":"transparent"}}>
+                {!otro&&<span className="cal-mas" style={{float:"right",fontSize:13,color:"#94A3B8",lineHeight:1}}>+</span>}
                 <div style={{fontSize:12,fontWeight:600,color:otro?"#CBD5E1":"#334155",marginBottom:4,...(esHoy?{background:"#2563EB",color:"#fff",borderRadius:20,width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center"}:{})}}>{d.getDate()}</div>
                 {!otro&&evs.slice(0,maxChips).map(e=><ChipEv key={e.k} e={e} grande={calVista==="semana"}/>)}
-                {!otro&&evs.length>maxChips&&<div onClick={()=>{setCalRef(d);setCalVista("semana");}} style={{fontSize:10.5,color:"#2563EB",fontWeight:600,cursor:"pointer",padding:"1px 4px"}}>+{evs.length-maxChips} {t("más","more")}</div>}
+                {!otro&&evs.length>maxChips&&<div onClick={ev=>{ev.stopPropagation();setCalRef(d);setCalVista("semana");}} style={{fontSize:10.5,color:"#2563EB",fontWeight:600,cursor:"pointer",padding:"1px 4px"}}>+{evs.length-maxChips} {t("más","more")}</div>}
               </div>);
           })}
         </div>
@@ -2077,13 +2113,13 @@ const loadTeam=async()=>{
         </div>
         {lista.length===0&&<div style={{padding:"22px 18px",fontSize:13,color:"#94A3B8",textAlign:"center"}}>{t("No hay fechas próximas.","No upcoming dates.")}</div>}
         {lista.map(e=>{const u=esUrgente(e);const dt=new Date(e.f+"T00:00:00");return(
-          <div key={e.k} onClick={()=>abrirCliente(e.c)} style={{display:"flex",gap:12,alignItems:"center",padding:"11px 18px",borderBottom:"1px solid #F1F5F9",cursor:"pointer"}}>
+          <div key={e.k} onClick={()=>abrirEv(e)} style={{display:"flex",gap:12,alignItems:"center",padding:"11px 18px",borderBottom:"1px solid #F1F5F9",cursor:"pointer"}}>
             <div style={{width:44,textAlign:"center",border:"1px solid "+(u?"#FECACA":"#E2E8F0"),background:u?"#FEF2F2":"#fff",borderRadius:8,padding:"4px 0",flexShrink:0}}>
               <div style={{fontSize:9.5,color:"#64748B",textTransform:"uppercase",fontWeight:700}}>{MESES_C[dt.getMonth()]}</div>
               <div style={{fontSize:17,fontWeight:800,color:u?"#DC2626":"#1E3A5F",lineHeight:1.1}}>{dt.getDate()}</div>
             </div>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:13,fontWeight:700,color:"#0F172A"}}>{TIPO_EV[e.tipo].label} — {e.c.nombre}</div>
+              <div style={{fontSize:13,fontWeight:700,color:"#0F172A",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:e.tipo==="nota"?"nowrap":"normal"}}>{e.tipo==="nota"?"📝 "+e.nota.texto:`${TIPO_EV[e.tipo].label} — ${e.c.nombre}`}</div>
               <div style={{fontSize:11.5,color:"#64748B",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.det}</div>
             </div>
             <div style={{fontSize:11.5,color:u?"#DC2626":"#64748B",fontWeight:u?800:600,whiteSpace:"nowrap"}}>{cuandoTxt(e.d)}</div>
@@ -2101,7 +2137,7 @@ const loadTeam=async()=>{
     const activos=clientes.filter(c=>!c.deportado);
     const mesIso=toISO(hoy).slice(0,7);
     const nuevosMes=clientes.filter(c=>(c.createdAt||"").slice(0,7)===mesIso).length;
-    const semana=eventosOficina.filter(e=>e.d>=0&&e.d<=6&&e.tipo!=="ead");
+    const semana=eventosOficina.filter(e=>e.d>=0&&e.d<=6&&e.tipo!=="ead"&&e.tipo!=="nota");
     const cuenta=k=>semana.filter(e=>e.tipo===k).length;
     const detSemana=[[cuenta("corte"),t("corte","court"),t("cortes","courts")],[cuenta("bio"),t("biométrico","biometric"),t("biométricos","biometrics")],[cuenta("ent"),t("entrevista","interview"),t("entrevistas","interviews")]].filter(x=>x[0]).map(([n,s,p])=>`${n} ${n===1?s:p}`).join(" · ")||t("Sin citas","No appointments");
     const recibidos=[
@@ -4307,6 +4343,34 @@ const loadTeam=async()=>{
             <button onClick={()=>handleDeleteUser(confirmDeleteUser)} style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#DC2626",color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>
               🗑 {t("Sí, eliminar acceso","Yes, remove access")}
             </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── NOTA DEL CALENDARIO ─────────────────────────────────────────── */}
+    {notaEdit&&(
+      <div onClick={()=>!notaGuardando&&setNotaEdit(null)} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:220,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+        <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:440,boxShadow:"0 24px 80px rgba(0,0,0,0.3)",overflow:"hidden"}}>
+          <div style={{background:"#FEF9C3",borderBottom:"1px solid #FDE68A",padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{fontSize:16,fontWeight:800,color:"#713F12"}}>📝 {notaEdit.id?t("Editar nota","Edit note"):t("Nueva nota","New note")}</div>
+            <button onClick={()=>setNotaEdit(null)} style={{background:"rgba(255,255,255,0.7)",border:"none",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:13}}>✕</button>
+          </div>
+          <div style={{padding:20,display:"grid",gap:14}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 140px",gap:10}}>
+              <div><label style={{display:"block",fontSize:11,fontWeight:700,color:"#475569",marginBottom:4}}>{t("FECHA","DATE")}</label>
+                <input type="date" value={notaEdit.fecha||""} onChange={e=>setNotaEdit(n=>({...n,fecha:e.target.value}))} style={{width:"100%",padding:"9px 10px",borderRadius:8,border:"1px solid #D1D5DB",fontSize:14,fontFamily:"inherit"}}/></div>
+              <div><label style={{display:"block",fontSize:11,fontWeight:700,color:"#475569",marginBottom:4}}>{t("HORA (opcional)","TIME (optional)")}</label>
+                <input type="time" value={notaEdit.hora||""} onChange={e=>setNotaEdit(n=>({...n,hora:e.target.value}))} style={{width:"100%",padding:"9px 10px",borderRadius:8,border:"1px solid #D1D5DB",fontSize:14,fontFamily:"inherit"}}/></div>
+            </div>
+            <div><label style={{display:"block",fontSize:11,fontWeight:700,color:"#475569",marginBottom:4}}>{t("NOTA","NOTE")}</label>
+              <textarea autoFocus value={notaEdit.texto||""} onChange={e=>setNotaEdit(n=>({...n,texto:e.target.value}))} rows={5} placeholder={t("Ej. Llamar a la Sra. Rosa para recordarle sus biométricos","E.g. Call Mrs. Rosa to remind her of biometrics")} style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #D1D5DB",fontSize:14,resize:"vertical",fontFamily:"inherit",lineHeight:1.45}}/></div>
+            {notaEdit.id&&notaEdit.actualizadoPor&&<div style={{fontSize:11,color:"#94A3B8"}}>{t("Última edición:","Last edit:")} {notaEdit.actualizadoPor}{notaEdit.actualizadoEn?" · "+new Date(notaEdit.actualizadoEn).toLocaleString("es-US",{day:"numeric",month:"short",hour:"numeric",minute:"2-digit"}):""}</div>}
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end",alignItems:"center"}}>
+              {notaEdit.id&&<button onClick={borrarNota} style={{marginRight:"auto",background:"#fff",color:"#DC2626",border:"1px solid #FECACA",borderRadius:8,padding:"9px 14px",fontWeight:600,fontSize:13,cursor:"pointer"}}>🗑 {t("Borrar","Delete")}</button>}
+              <button onClick={()=>setNotaEdit(null)} style={{background:"#fff",color:"#334155",border:"1px solid #D1D5DB",borderRadius:8,padding:"9px 16px",fontSize:13,cursor:"pointer"}}>{t("Cancelar","Cancel")}</button>
+              <button onClick={guardarNota} disabled={notaGuardando} style={{background:"#1E3A5F",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontWeight:700,fontSize:13,cursor:"pointer",opacity:notaGuardando?0.6:1}}>{notaGuardando?t("Guardando...","Saving..."):t("Guardar nota","Save note")}</button>
+            </div>
           </div>
         </div>
       </div>
