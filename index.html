@@ -1246,7 +1246,7 @@ const loadTeam=async()=>{
     }catch(e){console.error("loadAsilo:",e);}
     setAsiloLoading(false);
   };
-  const asiloRespuestas=(b)=>{const r={};Object.entries(b).forEach(([k,v])=>{if(k!=="id"&&!ASILO_META.includes(k))r[k]=v;});return r;};
+  const asiloRespuestas=(b)=>{if(b.secciones)return{secciones:b.secciones,datos:b.datos||{},foto:b.foto||"",firma:b.firma||""};const r={};Object.entries(b).forEach(([k,v])=>{if(k!=="id"&&!ASILO_META.includes(k))r[k]=v;});return r;};
   const marcarAsiloProcesado=async(b,clienteId)=>{
     const{db,doc,updateDoc}=window._firebase;
     const extra={estado:"procesado",clienteId,procesadoEn:new Date().toISOString(),procesadoPor:user.email};
@@ -4135,6 +4135,25 @@ const loadTeam=async()=>{
                 </div>
                 {abierto&&(
                   <div style={{padding:"4px 16px 16px",borderTop:"1px solid #E2E8F0"}}>
+                    {b.secciones?(<div style={{margin:"12px 0"}}>
+                      {(b.foto||b.firma)&&<div style={{display:"flex",gap:16,flexWrap:"wrap",marginBottom:14}}>
+                        {b.foto&&<div><div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:4}}>FOTO</div><a href={b.foto} download={`foto-${(b.nombre||"cliente").replace(/\s+/g,"-")}.jpg`}><img src={b.foto} alt="Foto" style={{width:130,borderRadius:10,border:"1px solid #E2E8F0"}}/></a></div>}
+                        {b.firma&&<div><div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:4}}>FIRMA</div><img src={b.firma} alt="Firma" style={{width:260,height:110,objectFit:"contain",background:"#fff",borderRadius:10,border:"1px solid #E2E8F0"}}/></div>}
+                      </div>}
+                      {b.secciones.map(sec=>(
+                        <div key={sec.titulo} style={{marginBottom:14}}>
+                          <div style={{fontSize:13,fontWeight:800,color:"#1E3A6E",textTransform:"uppercase",background:"#EFF6FF",padding:"6px 10px",borderRadius:6,marginBottom:8}}>{sec.titulo}</div>
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:"8px 18px"}}>
+                            {sec.campos.map((c,i)=>(
+                              <div key={i} style={{borderBottom:"1px dashed #E2E8F0",paddingBottom:6,gridColumn:(c.v||"").length>120?"1 / -1":undefined}}>
+                                <div style={{fontSize:11,fontWeight:700,color:"#64748B"}}>{c.l}</div>
+                                <div style={{fontSize:14,color:"#0F172A",whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{c.v}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>):(
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:"8px 18px",margin:"12px 0"}}>
                       {Object.entries(asiloRespuestas(b)).map(([k,v])=>(
                         <div key={k} style={{borderBottom:"1px dashed #E2E8F0",paddingBottom:6}}>
@@ -4142,7 +4161,7 @@ const loadTeam=async()=>{
                           <div style={{fontSize:14,color:"#0F172A",whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{valor(v)}</div>
                         </div>
                       ))}
-                    </div>
+                    </div>)}
                     <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",paddingTop:8,borderTop:"1px solid #F1F5F9"}}>
                       {b.estado!=="procesado"&&<>
                         <button onClick={()=>activarAsilo(b)} style={{background:"#2563EB",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontWeight:700,fontSize:13,cursor:"pointer"}}>➕ Crear cliente nuevo</button>
