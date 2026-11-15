@@ -2294,7 +2294,7 @@ const loadTeam=async()=>{
     {id:"uscis",     label:t("Verificador USCIS","USCIS Checker")+(uscisHabilitado?"":" 🔒"), icon:"ti-search", onClick:()=>{setShowUSCIS(true);if(uscisHabilitado)loadCasosUscis();}},
     {id:"envios",    label:t("Control de envíos","Shipments")+(enviosHabilitado?"":" 🔒"), icon:"ti-package", onClick:()=>{setShowEnvios(true);if(enviosHabilitado)loadEnvios();}},
     {id:"fotos",     label:t("Fotos para documentos","Document photos"), icon:"ti-camera", onClick:()=>{window.open("./fotos/index.html","_blank","noopener");}},
-    {id:"traducciones", label:t("Traducción de actas","Certificate translations"), icon:"ti-language", onClick:()=>{window.open("./traducciones/index.html","_blank","noopener");}},
+    {id:"traducciones", label:t("Traducción de actas (IA)","Certificate translations (AI)"), icon:"ti-language", onClick:()=>{window.open("https://claude.ai/artifact/3Yvrd4bqdV5KAhmH8Mcw2w","_blank","noopener");}},
     {id:"sec-sistema", section:t("Sistema","System"), show:isAdmin},
     {id:"config",    label:t("Configuración","Settings"), icon:"ti-settings", show:isAdmin, onClick:()=>setShowPagosConfig(true)},
     {id:"checklist", label:t("Primeros pasos","Getting started"), icon:"ti-rocket", sub:true, show:isAdmin, onClick:()=>setShowChecklist(true)},
