@@ -447,7 +447,7 @@ function App(){
   // ── Forma Asilo New + Reporte de Asilo ──
   const[showReportesMenu,setShowReportesMenu]=useState(false);
   const[formsOpen,setFormsOpen]=useState(false);const[borradoresFiltro,setBorradoresFiltro]=useState("");
-  const[showReporteAsilo,setShowReporteAsilo]=useState(false);const[reporteTipo,setReporteTipo]=useState("asilo");const[calRef,setCalRef]=useState(()=>new Date());const[calVista,setCalVista]=useState("mes");const[inicioBusq,setInicioBusq]=useState("");const[expBusq,setExpBusq]=useState("");const[expFiltro,setExpFiltro]=useState("todos");const[notasCal,setNotasCal]=useState([]);const[notaEdit,setNotaEdit]=useState(null);const[notaGuardando,setNotaGuardando]=useState(false);const[raSel,setRaSel]=useState("");
+  const[showReporteAsilo,setShowReporteAsilo]=useState(false);const[reporteTipo,setReporteTipo]=useState("asilo");const[calRef,setCalRef]=useState(()=>new Date());const[calVista,setCalVista]=useState("mes");const[inicioBusq,setInicioBusq]=useState("");const[expBusq,setExpBusq]=useState("");const[expFiltro,setExpFiltro]=useState("todos");const[expOrden,setExpOrdenRaw]=useState(()=>{try{return localStorage.getItem("expOrden")||"fecha";}catch(e){return "fecha";}});const setExpOrden=v=>{setExpOrdenRaw(v);try{localStorage.setItem("expOrden",v);}catch(e){}};const[notasCal,setNotasCal]=useState([]);const[notaEdit,setNotaEdit]=useState(null);const[notaGuardando,setNotaGuardando]=useState(false);const[raSel,setRaSel]=useState("");
   const[raBusq,setRaBusq]=useState("");const[raPais,setRaPais]=useState("");
   const[raDesde,setRaDesde]=useState("");const[raHasta,setRaHasta]=useState("");
   const[showAsiloNew,setShowAsiloNew]=useState(false);
@@ -2220,7 +2220,13 @@ const loadTeam=async()=>{
     const cnt=k=>k==="todos"?filasTodas.length:filasTodas.filter(f=>f.sis===k).length;
     const q=expBusq.trim().toLowerCase();
     const filas=filasTodas.filter(f=>(expFiltro==="todos"||f.sis===expFiltro)&&(!q||`${f.c.nombre} ${f.exp} ${f.tipo} ${f.num} ${f.c.alienNum||""} ${f.enc} ${f.estatus}`.toLowerCase().includes(q)))
-      .sort((a,b)=>{const fa=a.dias!=null&&a.dias>=0,fb=b.dias!=null&&b.dias>=0;if(fa&&fb)return a.dias-b.dias;if(fa)return -1;if(fb)return 1;return (a.c.nombre||"").localeCompare(b.c.nombre||"");});
+      .sort((a,b)=>{
+        const numExp=x=>{const m=/(\d+)/.exec(x.exp||"");return m?parseInt(m[1],10):Infinity;};
+        const porNombre=(a.c.nombre||"").localeCompare(b.c.nombre||"");
+        if(expOrden==="exp_asc"||expOrden==="exp_desc"){const na=numExp(a),nb=numExp(b);if(na!==nb){if(na===Infinity)return 1;if(nb===Infinity)return -1;return expOrden==="exp_asc"?na-nb:nb-na;}return (a.sis||"").localeCompare(b.sis||"")||porNombre;}
+        if(expOrden==="cliente")return porNombre||numExp(a)-numExp(b);
+        const fa=a.dias!=null&&a.dias>=0,fb=b.dias!=null&&b.dias>=0;if(fa&&fb)return a.dias-b.dias;if(fa)return -1;if(fb)return 1;return porNombre;
+      });
     const fmt=f=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(f||"");return m?`${m[2]}/${m[3]}/${m[1]}`:"—";};
     const th={padding:"11px 14px",fontSize:11.5,fontWeight:700,color:"#fff",textAlign:"left",whiteSpace:"nowrap"};
     const td={padding:"11px 14px",fontSize:13,color:"#1E293B",borderBottom:"1px solid #E2E8F0",verticalAlign:"middle"};
@@ -2235,11 +2241,21 @@ const loadTeam=async()=>{
             <i className="ti ti-search" style={{color:"#94A3B8"}}></i>
             <input value={expBusq} onChange={e=>setExpBusq(e.target.value)} placeholder={t("Buscar por cliente, tipo de caso, recibo, número A...","Search by client, case type, receipt, A#...")} style={{flex:1,border:"none",outline:"none",fontSize:13,padding:"9px 0",fontFamily:"inherit"}}/>
           </div>
+          <div style={{display:"flex",alignItems:"center",gap:8,border:"1px solid #E2E8F0",background:"#fff",borderRadius:8,padding:"0 4px 0 12px"}}>
+            <i className="ti ti-arrows-sort" style={{color:"#94A3B8"}}></i>
+            <span style={{fontSize:12,color:"#64748B",whiteSpace:"nowrap"}}>{t("Ordenar por","Sort by")}</span>
+            <select value={expOrden} onChange={e=>setExpOrden(e.target.value)} style={{border:"none",outline:"none",fontSize:13,padding:"9px 6px",background:"transparent",fontFamily:"inherit",color:"#1E293B",fontWeight:600,cursor:"pointer"}}>
+              <option value="fecha">{t("Próxima fecha","Next date")}</option>
+              <option value="exp_asc">{t("N.º de expediente (1, 2, 3…)","File # (1, 2, 3…)")}</option>
+              <option value="exp_desc">{t("N.º de expediente (mayor a menor)","File # (high to low)")}</option>
+              <option value="cliente">{t("Cliente (A–Z)","Client (A–Z)")}</option>
+            </select>
+          </div>
         </div>
         <div style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:12,overflow:"hidden"}}>
           <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><tr style={{background:"#1E3A5F"}}>{[t("Expediente","File"),t("Cliente","Client"),t("Sistema","System"),t("Tipo de caso","Case type"),t("Recibo / Tracking","Receipt / Tracking"),t("Próxima fecha","Next date"),t("Estatus","Status"),t("Encargada","Assigned")].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+            <thead><tr style={{background:"#1E3A5F"}}><th onClick={()=>setExpOrden(expOrden==="exp_asc"?"exp_desc":"exp_asc")} title={t("Ordenar por número de expediente","Sort by file number")} style={{...th,cursor:"pointer",userSelect:"none"}}>{t("Expediente","File")} {expOrden==="exp_asc"?"▲":expOrden==="exp_desc"?"▼":<span style={{opacity:.45}}>⇅</span>}</th>{[t("Cliente","Client"),t("Sistema","System"),t("Tipo de caso","Case type"),t("Recibo / Tracking","Receipt / Tracking"),t("Próxima fecha","Next date"),t("Estatus","Status"),t("Encargada","Assigned")].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
             <tbody>
               {filas.length===0&&<tr><td colSpan={8} style={{...td,textAlign:"center",color:"#94A3B8",padding:30}}>{t("No hay expedientes que coincidan.","No matching case files.")}</td></tr>}
               {filas.slice(0,400).map((f,i)=>{const s=SIS[f.sis]||SIS.uscis;const u=f.dias!=null&&f.dias>=0&&f.dias<=DIAS_URGENTE;return(
