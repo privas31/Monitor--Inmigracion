@@ -571,26 +571,17 @@ function App(){
   const loadCases=async()=>{
     setLoading(true);
     try{
-      const{db,collection,getDocs,query,where,orderBy}=window._firebase;
+      // Se cargan TODOS los documentos y se filtran/ordenan aquí: una consulta con where+orderBy
+      // en Firestore deja fuera, sin avisar, a los clientes sin officeId o sin createdAt.
+      const{db,collection,getDocs}=window._firebase;
       const officeId=officeData?.id||userData?.officeId;
-      //  MULTI-OFFICE: filter by officeId 
-      let q;
-      if(officeId){
-        q=query(collection(db,"clientes"),where("officeId","==",officeId),orderBy("createdAt","desc"));
-      }else{
-        q=query(collection(db,"clientes"),orderBy("createdAt","desc"));
-      }
-      const snap=await getDocs(q);
-      setClientes(snap.docs.map(d=>({id:d.id,...d.data()})));
+      const snap=await getDocs(collection(db,"clientes"));
+      const lista=snap.docs.map(d=>({id:d.id,...d.data()}))
+        .filter(c=>!officeId||!c.officeId||c.officeId===officeId)
+        .sort((a,b)=>{const k=x=>x&&x.toDate?x.toDate().toISOString():String(x||"");return k(b.createdAt).localeCompare(k(a.createdAt));});
+      setClientes(lista);
     }catch(e){
-      // Fallback without orderBy if index not ready
-      try{
-        const{db,collection,getDocs,query,where}=window._firebase;
-        const officeId=officeData?.id||userData?.officeId;
-        const q=officeId?query(collection(db,"clientes"),where("officeId","==",officeId)):collection(db,"clientes");
-        const snap=await getDocs(q);
-        setClientes(snap.docs.map(d=>({id:d.id,...d.data()})));
-      }catch(e2){console.error(e2);}
+      console.error("loadCases:",e);
     }
     setLoading(false);
   };
@@ -2275,7 +2266,7 @@ const loadTeam=async()=>{
             </tbody>
           </table>
           </div>
-          <div style={{padding:"10px 16px",fontSize:12,color:"#94A3B8",borderTop:"1px solid #E2E8F0"}}>{filas.length} {t("expedientes","case files")}{filas.length>400?t(" · mostrando los primeros 400"," · showing first 400"):""} · {t("Haz clic en una fila para abrir el cliente.","Click a row to open the client.")}</div>
+          <div style={{padding:"10px 16px",fontSize:12,color:"#94A3B8",borderTop:"1px solid #E2E8F0"}}>{filas.length} {t("expedientes","case files")} · {new Set(filasTodas.map(f=>f.c.id)).size} {t("clientes con casos","clients with cases")}{clientes.filter(c=>!(c.casos||[]).length).length?` · ${clientes.filter(c=>!(c.casos||[]).length).length} ${t("clientes sin casos (no salen aquí)","clients without cases (not shown here)")}`:""}{filas.length>400?t(" · mostrando los primeros 400"," · showing first 400"):""} · {t("Haz clic en una fila para abrir el cliente.","Click a row to open the client.")}</div>
         </div>
       </div>);
   };
