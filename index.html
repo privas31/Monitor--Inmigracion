@@ -447,7 +447,7 @@ function App(){
   // ── Forma Asilo New + Reporte de Asilo ──
   const[showReportesMenu,setShowReportesMenu]=useState(false);
   const[formsOpen,setFormsOpen]=useState(false);const[borradoresFiltro,setBorradoresFiltro]=useState("");
-  const[showReporteAsilo,setShowReporteAsilo]=useState(false);const[reporteTipo,setReporteTipo]=useState("asilo");const[calRef,setCalRef]=useState(()=>new Date());const[calVista,setCalVista]=useState("mes");const[inicioBusq,setInicioBusq]=useState("");const[expBusq,setExpBusq]=useState("");const[expFiltro,setExpFiltro]=useState("todos");const[expOrden,setExpOrdenRaw]=useState(()=>{try{return localStorage.getItem("expOrden")||"fecha";}catch(e){return "fecha";}});const setExpOrden=v=>{setExpOrdenRaw(v);try{localStorage.setItem("expOrden",v);}catch(e){}};const[notasCal,setNotasCal]=useState([]);const[notaEdit,setNotaEdit]=useState(null);const[notaGuardando,setNotaGuardando]=useState(false);const[raSel,setRaSel]=useState("");
+  const[showReporteAsilo,setShowReporteAsilo]=useState(false);const[reporteTipo,setReporteTipo]=useState("asilo");const[calRef,setCalRef]=useState(()=>new Date());const[calVista,setCalVista]=useState("mes");const[inicioBusq,setInicioBusq]=useState("");const[expBusq,setExpBusq]=useState("");const[expFiltro,setExpFiltro]=useState("todos");const[expOrden,setExpOrdenRaw]=useState(()=>{try{return localStorage.getItem("expOrden")||"fecha";}catch(e){return "fecha";}});const setExpOrden=v=>{setExpOrdenRaw(v);try{localStorage.setItem("expOrden",v);}catch(e){}};const[notasCal,setNotasCal]=useState([]);const[est,setEst]=useState(null);const[estCfg,setEstCfg]=useState({});const[estCfgEdit,setEstCfgEdit]=useState(null);const[estimadosList,setEstimadosList]=useState([]);const[notaEdit,setNotaEdit]=useState(null);const[notaGuardando,setNotaGuardando]=useState(false);const[raSel,setRaSel]=useState("");
   const[raBusq,setRaBusq]=useState("");const[raPais,setRaPais]=useState("");
   const[raDesde,setRaDesde]=useState("");const[raHasta,setRaHasta]=useState("");
   const[showAsiloNew,setShowAsiloNew]=useState(false);
@@ -2271,6 +2271,382 @@ const loadTeam=async()=>{
       </div>);
   };
 
+  // ══ CALCULADORA DE ESTIMADOS ═════════════════════════════════════════════════
+  // Tarifas de USCIS por defecto (Formulario G-1055, verificadas nov. 2026). Se pueden cambiar en "Tarifas y honorarios".
+  // p = en papel · l = en línea
+  const EST_CATALOGO={
+    i130:{f:"I-130 + I-130A",d:"Petición de familiar extranjero",p:675,l:625},
+    i485:{f:"I-485",d:"Ajuste de estatus (14 años o más)",p:1440,l:1440},
+    i485m:{f:"I-485",d:"Ajuste de estatus (menor de 14, con un padre)",p:950,l:950},
+    i864:{f:"I-864",d:"Declaración de patrocinio económico",p:0,l:0},
+    i765a:{f:"I-765",d:"Permiso de trabajo (presentado con I-485)",p:260,l:260},
+    i765:{f:"I-765",d:"Permiso de trabajo",p:520,l:470},
+    i765c8i:{f:"I-765 (c)(8)",d:"Permiso inicial con asilo pendiente (tarifa H.R. 1)",p:570,l:570},
+    i765c8r:{f:"I-765 (c)(8)",d:"Renovación con asilo pendiente (tarifa regular)",p:520,l:470},
+    hr1c8r:{f:"Tarifa H.R. 1",d:"Renovación de permiso con asilo pendiente",p:275,l:275},
+    hr1ini:{f:"Tarifa H.R. 1",d:"Permiso inicial por parole o TPS",p:570,l:570},
+    hr1ren:{f:"Tarifa H.R. 1",d:"Renovación de permiso por parole o TPS",p:280,l:280},
+    i131:{f:"I-131",d:"Permiso de viaje (advance parole)",p:630,l:580},
+    i131r:{f:"I-131",d:"Documento de viaje de refugiado / asilado (16+)",p:165,l:165},
+    i589:{f:"I-589",d:"Solicitud de asilo (tarifa H.R. 1)",p:100,l:100},
+    anual:{f:"Cuota anual de asilo",d:"Se paga cada año mientras el asilo siga pendiente; USCIS envía el aviso",p:105,l:105},
+    i821:{f:"I-821",d:"TPS: registro inicial (tarifa H.R. 1)",p:520,l:520},
+    bio:{f:"Biometría",d:"Huellas (TPS)",p:30,l:30},
+    i821d:{f:"I-821D",d:"DACA: renovación",p:605,l:555},
+    n400:{f:"N-400",d:"Solicitud de ciudadanía",p:760,l:710},
+    n400r:{f:"N-400",d:"Ciudadanía con tarifa reducida (ingresos bajos)",p:380,l:380},
+    i90:{f:"I-90",d:"Renovación o reemplazo de green card",p:465,l:415},
+    i751:{f:"I-751",d:"Quitar condiciones de la residencia",p:750,l:700},
+    i129f:{f:"I-129F",d:"Petición de prometido(a) K-1",p:675,l:675},
+    i601a:{f:"I-601A",d:"Perdón provisional por presencia ilegal",p:795,l:795},
+    i601:{f:"I-601",d:"Perdón de causales de inadmisibilidad",p:1050,l:1050},
+    i212:{f:"I-212",d:"Permiso para volver a solicitar admisión",p:1175,l:1175},
+    i539:{f:"I-539",d:"Extensión o cambio de estatus",p:470,l:420},
+    i912:{f:"I-912",d:"Solicitud de exención de tarifa",p:0,l:0},
+    ar11:{f:"AR-11",d:"Cambio de dirección ante USCIS",p:0,l:0},
+    eoir33:{f:"EOIR-33",d:"Cambio de dirección ante la corte",p:0,l:0},
+    foia:{f:"FOIA",d:"Solicitud de copia del expediente",p:0,l:0},
+  };
+  // [id del formulario, opcional?]
+  const EST_PROCESOS=[
+    {id:"familiar",n:"Petición familiar (I-130)",forms:[["i130"]]},
+    {id:"familiar_ajuste",n:"Petición familiar + Ajuste de estatus",forms:[["i130"],["i485"],["i864"],["i765a",1],["i131",1]]},
+    {id:"ajuste",n:"Ajuste de estatus (I-485)",forms:[["i485"],["i864"],["i765a",1],["i131",1]]},
+    {id:"asilo",n:"Asilo (I-589)",forms:[["i589"],["anual",1]]},
+    {id:"permiso_asilo",n:"Permiso de trabajo inicial: asilo pendiente (c)(8)",forms:[["i765c8i"]]},
+    {id:"renov_asilo",n:"Renovación de permiso: asilo pendiente (c)(8)",forms:[["i765c8r"],["hr1c8r"]]},
+    {id:"permiso",n:"Permiso de trabajo (otras categorías)",forms:[["i765"]]},
+    {id:"permiso_parole",n:"Permiso de trabajo inicial: parole o TPS",forms:[["i765"],["hr1ini"]]},
+    {id:"renov_parole",n:"Renovación de permiso: parole o TPS",forms:[["i765"],["hr1ren"]]},
+    {id:"tps",n:"TPS: registro inicial",forms:[["i821"],["bio"],["i765",1],["hr1ini",1]]},
+    {id:"tps_re",n:"TPS: re-registro",forms:[["bio"],["i765",1],["hr1ren",1]]},
+    {id:"daca",n:"DACA: renovación",forms:[["i821d"],["i765"]]},
+    {id:"viaje",n:"Permiso de viaje (I-131)",forms:[["i131"]]},
+    {id:"viaje_ref",n:"Documento de viaje de refugiado / asilado",forms:[["i131r"]]},
+    {id:"ciudadania",n:"Ciudadanía (N-400)",forms:[["n400"]]},
+    {id:"i90",n:"Renovación de green card (I-90)",forms:[["i90"]]},
+    {id:"i751",n:"Quitar condiciones (I-751)",forms:[["i751"]]},
+    {id:"k1",n:"Prometido(a) K-1 (I-129F)",forms:[["i129f"]]},
+    {id:"i601a",n:"Perdón provisional (I-601A)",forms:[["i601a"]]},
+    {id:"i601",n:"Perdón de inadmisibilidad (I-601)",forms:[["i601"]]},
+    {id:"i212",n:"Permiso para volver a solicitar admisión (I-212)",forms:[["i212"]]},
+    {id:"i539",n:"Extensión o cambio de estatus (I-539)",forms:[["i539"]]},
+    {id:"foia",n:"FOIA",forms:[["foia"]]},
+    {id:"direccion",n:"Cambio de dirección (AR-11 / EOIR-33)",forms:[["ar11"],["eoir33",1]]},
+    {id:"otro",n:"Otro (lo armo yo)",forms:[]},
+  ];
+  const estTarifa=(id,modo)=>{const o=(estCfg.tarifas||{})[id];const base=EST_CATALOGO[id]||{};const v=o&&o[modo==="linea"?"l":"p"];return v!=null&&v!==""?Number(v):(modo==="linea"?base.l:base.p)||0;};
+  const estNuevoId=()=>Math.random().toString(36).slice(2,9);
+  const estArmar=(procId,modo,prev)=>{
+    const pr=EST_PROCESOS.find(p=>p.id===procId)||EST_PROCESOS[0];
+    const hon=Number((estCfg.honorarios||{})[pr.id]||0);
+    return{
+      ...(prev||{}),proceso:pr.id,modo,
+      items:pr.forms.map(([fid,opt])=>({id:estNuevoId(),fid,f:EST_CATALOGO[fid].f,d:EST_CATALOGO[fid].d,monto:estTarifa(fid,modo),on:!opt,opt:!!opt})),
+      servicios:prev&&prev.servicios&&prev.proceso===pr.id?prev.servicios:[
+        {id:estNuevoId(),c:"Honorarios de preparación",d:"Llenado y armado del paquete",monto:hon,on:true},
+        {id:estNuevoId(),c:"Traducciones",d:"",monto:0,on:false},
+        {id:estNuevoId(),c:"Envío (FedEx / USPS)",d:"Con rastreo",monto:0,on:false},
+      ],
+    };
+  };
+  const estVacio=()=>({...estArmar("familiar_ajuste","papel"),clienteId:"",nombreLibre:"",validoDias:30,descuento:0,pagos:1,id:null,numero:null,fecha:new Date().toISOString()});
+  const E=est||estVacio();
+  const setE=fn=>setEst(prev=>{const base=prev||estVacio();return typeof fn==="function"?fn(base):{...base,...fn};});
+  const money=v=>"$"+(Number(v)||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const totUscis=(E.items||[]).filter(i=>i.on).reduce((a,i)=>a+(Number(i.monto)||0),0);
+  const totServ=(E.servicios||[]).filter(i=>i.on).reduce((a,i)=>a+(Number(i.monto)||0),0);
+  const totalEst=Math.max(0,totUscis+totServ-(Number(E.descuento)||0));
+  const clienteEst=clientes.find(c=>c.id===E.clienteId);
+  const nombreEst=clienteEst?clienteEst.nombre:(E.nombreLibre||"");
+  const procEst=EST_PROCESOS.find(p=>p.id===E.proceso)||EST_PROCESOS[0];
+  const fechaEst=new Date(E.fecha||Date.now());
+  const venceEst=new Date(fechaEst.getTime()+(Number(E.validoDias)||30)*86400000);
+  const fmtFechaUS=d=>`${pad2(d.getMonth()+1)}/${pad2(d.getDate())}/${d.getFullYear()}`;
+  const sigNumero=()=>{const max=estimadosList.reduce((m,x)=>Math.max(m,parseInt(String(x.numero||"").replace(/\D/g,""),10)||0),0);return "EST-"+String(max+1).padStart(4,"0");};
+  const numeroEst=E.numero||sigNumero();
+  const ofi={nombre:(estCfg.oficina||{}).nombre||officeData?.name||"Mi Oficina",dir:(estCfg.oficina||{}).direccion||"",tel:(estCfg.oficina||{}).telefono||"",email:(estCfg.oficina||{}).email||user?.email||""};
+
+  const loadEstimados=async()=>{
+    try{
+      const{db,collection,getDocs,doc,getDoc}=window._firebase;
+      const oid=officeData?.id||userData?.officeId||"personal";
+      const c=await getDoc(doc(db,"config","estimados_"+oid));
+      if(c.exists&&c.exists())setEstCfg(c.data()||{});
+      const snap=await getDocs(collection(db,"estimados"));
+      setEstimadosList(snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>!x.officeId||x.officeId===oid).sort((a,b)=>String(b.fecha||"").localeCompare(String(a.fecha||""))));
+    }catch(e){console.error("loadEstimados:",e);}
+  };
+  const guardarEstCfg=async(cfg)=>{
+    try{const{db,doc,setDoc}=window._firebase;const oid=officeData?.id||userData?.officeId||"personal";await setDoc(doc(db,"config","estimados_"+oid),{...cfg,actualizadoEn:new Date().toISOString(),actualizadoPor:user.email});setEstCfg(cfg);setEstCfgEdit(null);showToastFn(t("✅ Tarifas y honorarios guardados","✅ Fees saved"));}
+    catch(e){console.error(e);showToastFn(t("Error al guardar","Error saving"),"error");}
+  };
+  const guardarEstimado=async()=>{
+    if(!nombreEst.trim()){showToastFn(t("Escoge un cliente o escribe un nombre","Choose a client or type a name"),"error");return null;}
+    try{
+      const{db,collection,addDoc,doc,updateDoc}=window._firebase;
+      const oid=officeData?.id||userData?.officeId||"personal";
+      const data={numero:numeroEst,fecha:E.fecha,clienteId:E.clienteId||"",nombre:nombreEst,proceso:E.proceso,procesoNombre:procEst.n,modo:E.modo,validoDias:Number(E.validoDias)||30,
+        items:E.items,servicios:E.servicios,descuento:Number(E.descuento)||0,pagos:Number(E.pagos)||1,totalUscis:totUscis,totalServicios:totServ,total:totalEst,officeId:oid,actualizadoEn:new Date().toISOString(),actualizadoPor:user.email};
+      if(E.id){await updateDoc(doc(db,"estimados",E.id),data);setEstimadosList(p=>p.map(x=>x.id===E.id?{...x,...data}:x));}
+      else{const r=await addDoc(collection(db,"estimados"),{...data,creadoEn:data.actualizadoEn,creadoPor:user.email});setEstimadosList(p=>[{id:r.id,...data},...p]);setE(x=>({...x,id:r.id,numero:numeroEst}));}
+      setE(x=>({...x,numero:numeroEst}));
+      showToastFn(t(`✅ Estimado ${numeroEst} guardado`,`✅ Estimate ${numeroEst} saved`));
+      return numeroEst;
+    }catch(e){console.error(e);showToastFn(t("Error al guardar el estimado","Error saving estimate"),"error");return null;}
+  };
+
+  const descargarEstimadoPDF=()=>{
+    if(!nombreEst.trim()){showToastFn(t("Escoge un cliente o escribe un nombre","Choose a client or type a name"),"error");return;}
+    const jsPDF=(window.jspdf&&window.jspdf.jsPDF)?window.jspdf.jsPDF:window.jsPDF;
+    if(!jsPDF){showToastFn("Error cargando PDF. Recarga la página.","error");return;}
+    const tx=v=>String(v==null?"":v).replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[–—−]/g,"-").replace(/[^\x09\x0A\x0D\x20-\x7E -ÿ]/g,"").trim();
+    const pdf=new jsPDF({orientation:"portrait",unit:"mm",format:"letter"});
+    const W=pdf.internal.pageSize.getWidth(),H=pdf.internal.pageSize.getHeight(),M=16;
+    pdf.setFillColor(30,58,95);pdf.rect(0,0,W,38,"F");
+    pdf.setTextColor(255,255,255);pdf.setFont("helvetica","bold");pdf.setFontSize(15);pdf.text(tx(ofi.nombre),M,15);
+    pdf.setFont("helvetica","normal");pdf.setFontSize(8.5);pdf.setTextColor(168,196,224);
+    let yy=21;[ofi.dir,[ofi.tel,ofi.email].filter(Boolean).join("  ·  ")].filter(Boolean).forEach(l=>{pdf.text(tx(l),M,yy);yy+=4.5;});
+    pdf.setTextColor(255,255,255);pdf.setFont("helvetica","bold");pdf.setFontSize(20);pdf.text("ESTIMADO",W-M,15,{align:"right",charSpace:1.2});
+    pdf.setFont("helvetica","normal");pdf.setFontSize(8.5);pdf.setTextColor(168,196,224);
+    pdf.text("N.º "+numeroEst,W-M,21,{align:"right"});pdf.text("Fecha: "+fmtFechaUS(fechaEst)+"   ·   Válido hasta: "+fmtFechaUS(venceEst),W-M,25.5,{align:"right"});
+    pdf.setFillColor(44,76,116);pdf.setDrawColor(120,150,190);pdf.setLineWidth(0.2);pdf.roundedRect(W-M-38,28.5,38,6.5,1.5,1.5,"FD");
+    pdf.setTextColor(226,232,240);pdf.setFont("helvetica","bold");pdf.setFontSize(7.5);pdf.text("NO ES UNA FACTURA",W-M-19,32.8,{align:"center"});
+    let y=48;const col=(W-2*M)/3;
+    [["PREPARADO PARA",nombreEst],["PROCESO",procEst.n],["PRESENTACIÓN",E.modo==="linea"?"En línea":"En papel"]].forEach(([l,v],i)=>{
+      pdf.setFont("helvetica","bold");pdf.setFontSize(7.5);pdf.setTextColor(148,163,184);pdf.text(l,M+i*col,y);
+      pdf.setFontSize(10);pdf.setTextColor(15,23,42);pdf.text(pdf.splitTextToSize(tx(v),col-4),M+i*col,y+5.5);
+    });
+    y+=16;pdf.setDrawColor(226,232,240);pdf.line(M,y,W-M,y);y+=7;
+    const tabla=(titulo,cab,filas)=>{
+      pdf.setFont("helvetica","bold");pdf.setFontSize(8.5);pdf.setTextColor(30,58,95);pdf.text(titulo,M,y);
+      pdf.autoTable({startY:y+2.5,head:[cab],body:filas,theme:"plain",margin:{left:M,right:M},
+        styles:{font:"helvetica",fontSize:9,cellPadding:[2.6,3],textColor:[30,41,59],lineColor:[241,245,249],lineWidth:{bottom:0.3}},
+        headStyles:{fillColor:[241,245,249],textColor:[71,85,105],fontStyle:"bold",fontSize:7.5},
+        columnStyles:{0:{fontStyle:"bold",cellWidth:46},2:{halign:"right",cellWidth:32}}});
+      y=pdf.lastAutoTable.finalY+8;
+    };
+    const its=(E.items||[]).filter(i=>i.on);
+    if(its.length)tabla("TARIFAS DE USCIS (SE PAGAN A USCIS)",["FORMULARIO","DESCRIPCIÓN","TARIFA"],its.map(i=>[tx(i.f),tx(i.d),money(i.monto)]));
+    const sv=(E.servicios||[]).filter(i=>i.on);
+    if(sv.length)tabla("SERVICIOS DE LA OFICINA",["CONCEPTO","DETALLE","IMPORTE"],sv.map(i=>[tx(i.c),tx(i.d),money(i.monto)]));
+    if(y>H-70){pdf.addPage();y=20;}
+    const xL=W-M-80,xR=W-M;
+    const lin=(l,v,neg)=>{pdf.setFont("helvetica","normal");pdf.setFontSize(9.5);pdf.setTextColor(71,85,105);pdf.text(l,xL,y);pdf.text((neg?"- ":"")+money(v),xR,y,{align:"right"});y+=6;};
+    lin("Tarifas de USCIS",totUscis);lin("Servicios de la oficina",totServ);if(Number(E.descuento)>0)lin("Descuento",E.descuento,true);
+    pdf.setDrawColor(30,58,95);pdf.setLineWidth(0.6);pdf.line(xL,y-2,xR,y-2);y+=5;
+    pdf.setFont("helvetica","bold");pdf.setFontSize(13);pdf.setTextColor(30,58,95);pdf.text("TOTAL ESTIMADO",xL,y);pdf.text(money(totalEst),xR,y,{align:"right"});y+=6.5;
+    if(Number(E.pagos)>1){pdf.setFont("helvetica","normal");pdf.setFontSize(9);pdf.setTextColor(100,116,139);pdf.text(`Plan de ${E.pagos} pagos`,xL,y);pdf.text(money(totalEst/E.pagos)+" c/u",xR,y,{align:"right"});y+=6;}
+    y+=6;
+    const nota="Importante: Este documento es un estimado y no es una factura ni un comprobante de pago. Las tarifas de USCIS son las vigentes a la fecha de este estimado según la tabla oficial (Formulario G-1055) y pueden cambiar; se confirman el día en que se presenta la solicitud. Los honorarios no incluyen gastos no listados.";
+    const ln=pdf.splitTextToSize(nota,W-2*M-8);const hN=ln.length*4.2+7;
+    if(y+hN>H-16){pdf.addPage();y=20;}
+    pdf.setFillColor(248,250,252);pdf.setDrawColor(226,232,240);pdf.setLineWidth(0.2);pdf.roundedRect(M,y,W-2*M,hN,2,2,"FD");
+    pdf.setFont("helvetica","normal");pdf.setFontSize(8.3);pdf.setTextColor(100,116,139);pdf.text(ln,M+4,y+5.5);
+    const pc=pdf.internal.getNumberOfPages();
+    for(let i=1;i<=pc;i++){pdf.setPage(i);pdf.setDrawColor(226,232,240);pdf.setLineWidth(0.3);pdf.line(M,H-10,W-M,H-10);pdf.setFont("helvetica","normal");pdf.setFontSize(7.5);pdf.setTextColor(148,163,184);pdf.text(tx(ofi.nombre)+"  ·  Estimado "+numeroEst,M,H-5.5);pdf.text(`Página ${i} de ${pc}`,W-M,H-5.5,{align:"right"});}
+    const slug=tx(nombreEst).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Za-z0-9]+/g,"-").replace(/^-|-$/g,"");
+    pdf.save(`${numeroEst}-${slug||"cliente"}.pdf`);
+    showToastFn(t("📄 Estimado descargado","📄 Estimate downloaded"));
+  };
+  const enviarEstimadoWA=()=>{
+    if(!nombreEst.trim()){showToastFn(t("Escoge un cliente o escribe un nombre","Choose a client or type a name"),"error");return;}
+    const lineas=[
+      `Hola ${nombreEst.split(" ")[0]}, le comparto el estimado ${numeroEst} de ${ofi.nombre}:`,"",
+      `*${procEst.n}*`,
+      ...(E.items||[]).filter(i=>i.on).map(i=>`• ${i.f}: ${money(i.monto)}`),
+      ...(E.servicios||[]).filter(i=>i.on).map(i=>`• ${i.c}: ${money(i.monto)}`),
+      ...(Number(E.descuento)>0?[`• Descuento: -${money(E.descuento)}`]:[]),
+      "",`*Total estimado: ${money(totalEst)}*`,
+      ...(Number(E.pagos)>1?[`Plan de ${E.pagos} pagos de ${money(totalEst/E.pagos)}`]:[]),
+      `Válido hasta: ${fmtFechaUS(venceEst)}`,"",
+      "Este es un estimado, no una factura. Las tarifas de USCIS pueden cambiar.",
+    ];
+    const tel=String(clienteEst?.telefono||"").replace(/\D/g,"");
+    const num=tel.length===10?"1"+tel:tel;
+    window.open(`https://wa.me/${num}?text=${encodeURIComponent(lineas.join("\n"))}`,"_blank","noopener");
+  };
+
+  const renderEstimados=()=>{
+    const inp={width:"100%",padding:"9px 11px",borderRadius:8,border:"1px solid #D1D5DB",fontSize:13.5,fontFamily:"inherit",background:"#fff",color:"#1E293B",outline:"none"};
+    const lbl={display:"block",fontSize:11,fontWeight:700,color:"#64748B",marginBottom:5,letterSpacing:".03em"};
+    const card={background:"#fff",border:"1px solid #E2E8F0",borderRadius:12};
+    const ch={padding:"14px 18px",borderBottom:"1px solid #F1F5F9",fontSize:15,fontWeight:700,color:"#1E3A5F",display:"flex",justifyContent:"space-between",alignItems:"center"};
+    const filaItem=(it,onToggle,onMonto,titulo,detalle,onDel)=>(
+      <div key={it.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 10px",border:"1px solid #E2E8F0",borderRadius:8,opacity:it.on?1:0.55,background:"#fff"}}>
+        <input type="checkbox" checked={!!it.on} onChange={onToggle} style={{width:17,height:17,accentColor:"#2563EB",cursor:"pointer",flexShrink:0}}/>
+        <div style={{flex:1,minWidth:0}}>{titulo}{detalle}</div>
+        <div style={{display:"flex",alignItems:"center",border:"1px solid #E2E8F0",borderRadius:6,padding:"0 6px",background:"#fff"}}>
+          <span style={{fontSize:12.5,color:"#94A3B8"}}>$</span>
+          <input type="number" min="0" step="1" value={it.monto} onChange={onMonto} style={{width:70,border:"none",outline:"none",textAlign:"right",fontWeight:700,color:"#1E3A5F",fontSize:13.5,padding:"5px 0",fontFamily:"inherit",background:"transparent"}}/>
+        </div>
+        {onDel&&<button onClick={onDel} title={t("Quitar","Remove")} style={{border:"none",background:"none",color:"#94A3B8",cursor:"pointer",fontSize:15,padding:2}}>✕</button>}
+      </div>);
+    const updItem=(lista,id,cambios)=>setE(x=>({...x,[lista]:x[lista].map(i=>i.id===id?{...i,...cambios}:i)}));
+    const quitar=(lista,id)=>setE(x=>({...x,[lista]:x[lista].filter(i=>i.id!==id)}));
+    const td={padding:"10px 12px",borderBottom:"1px solid #F1F5F9",fontSize:13};
+    const thS={background:"#F1F5F9",color:"#475569",fontSize:11,textAlign:"left",padding:"9px 12px",letterSpacing:".04em"};
+    const btn=(bg,col,bd)=>({background:bg,color:col,border:bd||"none",borderRadius:8,padding:"10px 14px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontFamily:"inherit"});
+    const formsDisponibles=Object.entries(EST_CATALOGO);
+    return(
+      <div style={{padding:"26px 30px 34px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap",marginBottom:20}}>
+          <div><div style={{fontSize:25,fontWeight:800,color:"#0F172A"}}>{t("Calculadora de estimados","Estimate calculator")}</div><div style={{fontSize:13.5,color:"#64748B",marginTop:4}}>{t("Prepara un presupuesto para el cliente. No se registra como cobro.","Prepare a quote for the client. It is not recorded as a charge.")}</div></div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>setEst(estVacio())} style={btn("#fff","#334155","1px solid #D1D5DB")}><i className="ti ti-file-plus"></i>{t("Nuevo estimado","New estimate")}</button>
+            <button onClick={()=>setEstCfgEdit(JSON.parse(JSON.stringify({tarifas:estCfg.tarifas||{},honorarios:estCfg.honorarios||{},oficina:{nombre:ofi.nombre,direccion:ofi.dir,telefono:ofi.tel,email:ofi.email}})))} style={btn("#fff","#334155","1px solid #D1D5DB")}><i className="ti ti-settings"></i>{t("Tarifas y honorarios","Fees & rates")}</button>
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"minmax(360px,440px) minmax(0,1fr)",gap:20,alignItems:"start"}}>
+          <div style={{display:"grid",gap:16}}>
+            <div style={card}><div style={ch}>1. {t("Cliente y proceso","Client and process")}</div>
+              <div style={{padding:"16px 18px",display:"grid",gap:14}}>
+                <div><label style={lbl}>{t("CLIENTE","CLIENT")}</label>
+                  <select value={E.clienteId||""} onChange={e=>setE({clienteId:e.target.value})} style={inp}>
+                    <option value="">{t("— Persona que todavía no es cliente —","— Not a client yet —")}</option>
+                    {[...clientes].sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"")).map(c=><option key={c.id} value={c.id}>{c.nombre}{c.expediente?` · ${c.expediente}`:""}</option>)}
+                  </select>
+                  {!E.clienteId&&<input value={E.nombreLibre||""} onChange={e=>setE({nombreLibre:e.target.value})} placeholder={t("Escribe el nombre de la persona","Type the person's name")} style={{...inp,marginTop:8}}/>}
+                </div>
+                <div><label style={lbl}>{t("PROCESO","PROCESS")}</label>
+                  <select value={E.proceso} onChange={e=>setE(x=>estArmar(e.target.value,x.modo,x))} style={{...inp,fontWeight:700}}>
+                    {EST_PROCESOS.map(p=><option key={p.id} value={p.id}>{p.n}</option>)}
+                  </select></div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  <div><label style={lbl}>{t("¿CÓMO SE PRESENTA?","FILING METHOD")}</label>
+                    <select value={E.modo} onChange={e=>{const m=e.target.value;setE(x=>({...x,modo:m,items:x.items.map(i=>i.fid?{...i,monto:estTarifa(i.fid,m)}:i)}));}} style={inp}>
+                      <option value="papel">{t("En papel","Paper")}</option><option value="linea">{t("En línea","Online")}</option>
+                    </select></div>
+                  <div><label style={lbl}>{t("VÁLIDO POR","VALID FOR")}</label>
+                    <select value={E.validoDias} onChange={e=>setE({validoDias:Number(e.target.value)})} style={inp}>
+                      {[15,30,60,90].map(d=><option key={d} value={d}>{d} {t("días","days")} ({fmtFechaUS(new Date(fechaEst.getTime()+d*86400000))})</option>)}
+                    </select></div>
+                </div>
+              </div></div>
+
+            <div style={card}><div style={ch}>2. {t("Formularios","Forms")} <span style={{fontSize:11,color:"#94A3B8",fontWeight:500}}>{t("Tarifas USCIS · G-1055","USCIS fees · G-1055")}</span></div>
+              <div style={{padding:"14px 18px",display:"grid",gap:8}}>
+                {E.items.length===0&&<div style={{fontSize:13,color:"#94A3B8",textAlign:"center",padding:8}}>{t("Agrega los formularios abajo.","Add forms below.")}</div>}
+                {E.items.map(it=>filaItem(it,()=>updItem("items",it.id,{on:!it.on}),e=>updItem("items",it.id,{monto:e.target.value}),
+                  <div style={{fontSize:13,fontWeight:700,color:"#0F172A"}}>{it.f}{it.opt&&<span style={{fontSize:9.5,fontWeight:700,background:"#F1F5F9",color:"#64748B",borderRadius:10,padding:"1px 6px",marginLeft:6}}>{t("OPCIONAL","OPTIONAL")}</span>}</div>,
+                  <div style={{fontSize:11.5,color:"#64748B"}}>{it.d}</div>,()=>quitar("items",it.id)))}
+                <select value="" onChange={e=>{const fid=e.target.value;if(!fid)return;setE(x=>({...x,items:[...x.items,{id:estNuevoId(),fid,f:EST_CATALOGO[fid].f,d:EST_CATALOGO[fid].d,monto:estTarifa(fid,x.modo),on:true,opt:false}]}));}} style={{...inp,color:"#2563EB",fontWeight:600,border:"1px dashed #BFDBFE",background:"#F8FBFF"}}>
+                  <option value="">{t("+ Agregar otro formulario","+ Add another form")}</option>
+                  {formsDisponibles.map(([k,v])=><option key={k} value={k}>{v.f}: {v.d} ({money(estTarifa(k,E.modo))})</option>)}
+                </select>
+              </div></div>
+
+            <div style={card}><div style={ch}>3. {t("Honorarios y otros gastos","Fees and other costs")}</div>
+              <div style={{padding:"14px 18px",display:"grid",gap:8}}>
+                {E.servicios.map(it=>filaItem(it,()=>updItem("servicios",it.id,{on:!it.on}),e=>updItem("servicios",it.id,{monto:e.target.value}),
+                  <input value={it.c} onChange={e=>updItem("servicios",it.id,{c:e.target.value})} style={{border:"none",outline:"none",fontSize:13,fontWeight:700,color:"#0F172A",width:"100%",padding:0,fontFamily:"inherit",background:"transparent"}}/>,
+                  <input value={it.d} onChange={e=>updItem("servicios",it.id,{d:e.target.value})} placeholder={t("Detalle (opcional)","Detail (optional)")} style={{border:"none",outline:"none",fontSize:11.5,color:"#64748B",width:"100%",padding:0,fontFamily:"inherit",background:"transparent"}}/>,()=>quitar("servicios",it.id)))}
+                <button onClick={()=>setE(x=>({...x,servicios:[...x.servicios,{id:estNuevoId(),c:t("Nuevo concepto","New item"),d:"",monto:0,on:true}]}))} style={{textAlign:"left",background:"none",border:"none",color:"#2563EB",fontWeight:600,fontSize:12.5,cursor:"pointer",padding:"2px 0",fontFamily:"inherit"}}>{t("+ Agregar concepto","+ Add item")}</button>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:4}}>
+                  <div><label style={lbl}>{t("DESCUENTO","DISCOUNT")}</label><input type="number" min="0" value={E.descuento} onChange={e=>setE({descuento:e.target.value})} style={inp}/></div>
+                  <div><label style={lbl}>{t("PLAN DE PAGOS","PAYMENT PLAN")}</label>
+                    <select value={E.pagos} onChange={e=>setE({pagos:Number(e.target.value)})} style={inp}>{[1,2,3,4,5,6].map(n=><option key={n} value={n}>{n===1?t("Un solo pago","Single payment"):`${n} ${t("pagos","payments")}`}</option>)}</select></div>
+                </div>
+              </div></div>
+
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <button onClick={async()=>{await guardarEstimado();descargarEstimadoPDF();}} style={btn("#1E3A5F","#fff")}><i className="ti ti-file-download"></i>{t("Descargar PDF","Download PDF")}</button>
+              <button onClick={()=>{enviarEstimadoWA();guardarEstimado();}} style={btn("#25D366","#fff")}><i className="ti ti-brand-whatsapp"></i>WhatsApp</button>
+              <button onClick={guardarEstimado} style={btn("#fff","#334155","1px solid #D1D5DB")}><i className="ti ti-device-floppy"></i>{E.clienteId?t("Guardar en el cliente","Save to client"):t("Guardar estimado","Save estimate")}</button>
+            </div>
+
+            {estimadosList.length>0&&<div style={card}><div style={ch}>{t("Estimados guardados","Saved estimates")}<span style={{fontSize:11,color:"#94A3B8",fontWeight:500}}>{estimadosList.length}</span></div>
+              <div style={{maxHeight:260,overflowY:"auto"}}>
+                {estimadosList.slice(0,50).map(x=>(
+                  <div key={x.id} onClick={()=>setEst({...x,items:x.items||[],servicios:x.servicios||[],nombreLibre:x.clienteId?"":x.nombre})} style={{display:"flex",gap:10,alignItems:"center",padding:"10px 18px",borderBottom:"1px solid #F1F5F9",cursor:"pointer",background:E.id===x.id?"#EFF6FF":"#fff"}}>
+                    <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:"#0F172A"}}>{x.numero} · {x.nombre}</div><div style={{fontSize:11.5,color:"#64748B",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.procesoNombre} · {x.fecha?fmtFechaUS(new Date(x.fecha)):""}</div></div>
+                    <div style={{fontSize:13,fontWeight:800,color:"#1E3A5F"}}>{money(x.total)}</div>
+                  </div>))}
+              </div></div>}
+          </div>
+
+          {/* Vista previa del estimado */}
+          <div style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:12,boxShadow:"0 10px 30px rgba(15,23,42,.08)",overflow:"hidden",position:"sticky",top:16}}>
+            <div style={{background:"#1E3A5F",color:"#fff",padding:"24px 30px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16,flexWrap:"wrap"}}>
+              <div><div style={{fontSize:19,fontWeight:800}}>{ofi.nombre}</div><div style={{fontSize:12,color:"#A8C4E0",marginTop:5,lineHeight:1.5}}>{ofi.dir&&<>{ofi.dir}<br/></>}{[ofi.tel,ofi.email].filter(Boolean).join(" · ")}</div></div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:26,fontWeight:800,letterSpacing:".12em"}}>ESTIMADO</div>
+                <div style={{fontSize:12,color:"#A8C4E0",marginTop:4,lineHeight:1.5}}>N.º {numeroEst}{!E.numero&&<span style={{opacity:.7}}> {t("(al guardar)","(on save)")}</span>}<br/>{t("Fecha","Date")}: {fmtFechaUS(fechaEst)} · {t("Válido hasta","Valid until")}: {fmtFechaUS(venceEst)}</div>
+                <div style={{display:"inline-block",marginTop:8,fontSize:10.5,fontWeight:700,letterSpacing:".06em",background:"rgba(255,255,255,.12)",border:"1px solid rgba(255,255,255,.3)",color:"#E2E8F0",borderRadius:6,padding:"4px 9px"}}>{t("NO ES UNA FACTURA","NOT AN INVOICE")}</div>
+              </div>
+            </div>
+            <div style={{padding:"22px 30px 26px"}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,paddingBottom:16,borderBottom:"1px solid #E2E8F0"}}>
+                {[[t("PREPARADO PARA","PREPARED FOR"),nombreEst||<span style={{color:"#CBD5E1"}}>{t("(sin nombre)","(no name)")}</span>],[t("PROCESO","PROCESS"),procEst.n],[t("PRESENTACIÓN","FILING"),E.modo==="linea"?t("En línea","Online"):t("En papel","Paper")]].map(([l,v],i)=>(
+                  <div key={i}><div style={{fontSize:10.5,fontWeight:700,color:"#94A3B8",letterSpacing:".05em"}}>{l}</div><div style={{fontSize:13.5,fontWeight:600,marginTop:3,color:"#0F172A"}}>{v}</div></div>))}
+              </div>
+              {E.items.some(i=>i.on)&&<><div style={{fontSize:11.5,fontWeight:800,color:"#1E3A5F",letterSpacing:".06em",margin:"18px 0 8px"}}>{t("TARIFAS DE USCIS (SE PAGAN A USCIS)","USCIS FEES (PAID TO USCIS)")}</div>
+                <table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th style={thS}>{t("FORMULARIO","FORM")}</th><th style={thS}>{t("DESCRIPCIÓN","DESCRIPTION")}</th><th style={{...thS,textAlign:"right"}}>{t("TARIFA","FEE")}</th></tr></thead>
+                  <tbody>{E.items.filter(i=>i.on).map(i=><tr key={i.id}><td style={{...td,fontWeight:700,whiteSpace:"nowrap"}}>{i.f}</td><td style={td}>{i.d}</td><td style={{...td,textAlign:"right",whiteSpace:"nowrap"}}>{money(i.monto)}</td></tr>)}</tbody></table></>}
+              {E.servicios.some(i=>i.on)&&<><div style={{fontSize:11.5,fontWeight:800,color:"#1E3A5F",letterSpacing:".06em",margin:"18px 0 8px"}}>{t("SERVICIOS DE LA OFICINA","OFFICE SERVICES")}</div>
+                <table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th style={thS}>{t("CONCEPTO","ITEM")}</th><th style={thS}>{t("DETALLE","DETAIL")}</th><th style={{...thS,textAlign:"right"}}>{t("IMPORTE","AMOUNT")}</th></tr></thead>
+                  <tbody>{E.servicios.filter(i=>i.on).map(i=><tr key={i.id}><td style={{...td,fontWeight:700}}>{i.c}</td><td style={td}>{i.d}</td><td style={{...td,textAlign:"right",whiteSpace:"nowrap"}}>{money(i.monto)}</td></tr>)}</tbody></table></>}
+              <div style={{marginTop:16,marginLeft:"auto",width:320,maxWidth:"100%",fontSize:13.5}}>
+                {[[t("Tarifas de USCIS","USCIS fees"),money(totUscis)],[t("Servicios de la oficina","Office services"),money(totServ)],...(Number(E.descuento)>0?[[t("Descuento","Discount"),"− "+money(E.descuento)]]:[])].map(([l,v])=><div key={l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",color:"#475569"}}><span>{l}</span><span>{v}</span></div>)}
+                <div style={{display:"flex",justifyContent:"space-between",borderTop:"2px solid #1E3A5F",marginTop:6,paddingTop:10,fontSize:18,fontWeight:800,color:"#1E3A5F"}}><span>{t("TOTAL ESTIMADO","ESTIMATED TOTAL")}</span><span>{money(totalEst)}</span></div>
+                {Number(E.pagos)>1&&<div style={{display:"flex",justifyContent:"space-between",padding:"6px 0",fontSize:12,color:"#64748B"}}><span>{t(`Plan de ${E.pagos} pagos`,`${E.pagos}-payment plan`)}</span><span>{money(totalEst/E.pagos)} c/u</span></div>}
+              </div>
+              <div style={{marginTop:20,background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:8,padding:"12px 14px",fontSize:11.5,color:"#64748B",lineHeight:1.55}}>
+                <b>{t("Importante:","Important:")}</b> {t("Este documento es un estimado y no es una factura ni un comprobante de pago. Las tarifas de USCIS son las vigentes a la fecha de este estimado según la tabla oficial (Formulario G-1055) y pueden cambiar; se confirman el día en que se presenta la solicitud. Los honorarios no incluyen gastos no listados.","This document is an estimate, not an invoice or receipt. USCIS fees are current as of this estimate per the official fee schedule (Form G-1055) and may change; they are confirmed on the filing date. Fees do not include unlisted costs.")}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tarifas y honorarios */}
+        {estCfgEdit&&(
+          <div onClick={()=>setEstCfgEdit(null)} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.6)",zIndex:230,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"24px 12px",overflowY:"auto"}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:860,boxShadow:"0 24px 80px rgba(0,0,0,0.3)",overflow:"hidden"}}>
+              <div style={{background:"#1E3A5F",padding:"18px 24px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>⚙️ {t("Tarifas y honorarios","Fees and rates")}</div>
+                <button onClick={()=>setEstCfgEdit(null)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,color:"#fff",padding:"6px 12px",cursor:"pointer"}}>✕</button>
+              </div>
+              <div style={{padding:"18px 24px",display:"grid",gap:20}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:800,color:"#1E3A5F",marginBottom:8}}>{t("Datos de la oficina (encabezado del estimado)","Office info (estimate header)")}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                    {[["nombre",t("Nombre de la oficina","Office name")],["telefono",t("Teléfono","Phone")],["direccion",t("Dirección","Address")],["email","Email"]].map(([k,l])=>(
+                      <div key={k}><label style={lbl}>{l.toUpperCase()}</label><input value={estCfgEdit.oficina[k]||""} onChange={e=>{const v=e.target.value;setEstCfgEdit(c=>({...c,oficina:{...c.oficina,[k]:v}}));}} style={inp}/></div>))}
+                  </div>
+                </div>
+                <div>
+                  <div style={{fontSize:13,fontWeight:800,color:"#1E3A5F",marginBottom:4}}>{t("Mis honorarios por proceso","My fees per process")}</div>
+                  <div style={{fontSize:12,color:"#64748B",marginBottom:8}}>{t("Se llenan solos al escoger el proceso. Siempre puedes cambiarlos en cada estimado.","Auto-filled when choosing the process; editable on each estimate.")}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(250px,1fr))",gap:8}}>
+                    {EST_PROCESOS.map(p=>(
+                      <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,border:"1px solid #E2E8F0",borderRadius:8,padding:"6px 10px"}}>
+                        <span style={{flex:1,fontSize:12.5,color:"#334155"}}>{p.n}</span>
+                        <span style={{fontSize:12,color:"#94A3B8"}}>$</span>
+                        <input type="number" min="0" value={estCfgEdit.honorarios[p.id]??""} placeholder="0" onChange={e=>{const v=e.target.value;setEstCfgEdit(c=>({...c,honorarios:{...c.honorarios,[p.id]:v}}));}} style={{width:72,border:"1px solid #E2E8F0",borderRadius:6,padding:"5px 6px",textAlign:"right",fontWeight:700,fontFamily:"inherit"}}/>
+                      </div>))}
+                  </div>
+                </div>
+                <div>
+                  <div style={{fontSize:13,fontWeight:800,color:"#1E3A5F",marginBottom:4}}>{t("Tarifas de USCIS","USCIS fees")}</div>
+                  <div style={{fontSize:12,color:"#64748B",marginBottom:8}}>{t("Ya vienen con las tarifas vigentes (G-1055, noviembre 2026). Cámbialas aquí cuando USCIS las actualice. Verifica en uscis.gov/g-1055.","Pre-filled with current fees (G-1055, Nov 2026). Update here when USCIS changes them.")}</div>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
+                    <thead><tr><th style={thS}>{t("FORMULARIO","FORM")}</th><th style={thS}>{t("DESCRIPCIÓN","DESCRIPTION")}</th><th style={{...thS,textAlign:"right"}}>{t("EN PAPEL","PAPER")}</th><th style={{...thS,textAlign:"right"}}>{t("EN LÍNEA","ONLINE")}</th></tr></thead>
+                    <tbody>{Object.entries(EST_CATALOGO).map(([k,v])=>{const o=estCfgEdit.tarifas[k]||{};const cell=(campo)=>(
+                      <input type="number" min="0" value={o[campo]??""} placeholder={String(v[campo])} onChange={e=>{const val=e.target.value;setEstCfgEdit(c=>({...c,tarifas:{...c.tarifas,[k]:{...(c.tarifas[k]||{}),[campo]:val}}}));}} style={{width:76,border:"1px solid #E2E8F0",borderRadius:6,padding:"4px 6px",textAlign:"right",fontFamily:"inherit",fontWeight:o[campo]!=null&&o[campo]!==""?800:400}}/>);
+                      return(<tr key={k}><td style={{...td,fontWeight:700,whiteSpace:"nowrap"}}>{v.f}</td><td style={{...td,color:"#475569"}}>{v.d}</td><td style={{...td,textAlign:"right"}}>{cell("p")}</td><td style={{...td,textAlign:"right"}}>{cell("l")}</td></tr>);})}
+                    </tbody></table>
+                  <div style={{fontSize:11.5,color:"#94A3B8",marginTop:6}}>{t("Si dejas un cuadro vacío, se usa la tarifa que aparece en gris.","Empty boxes use the gray default.")}</div>
+                </div>
+                <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
+                  <button onClick={()=>setEstCfgEdit(null)} style={btn("#fff","#334155","1px solid #D1D5DB")}>{t("Cancelar","Cancel")}</button>
+                  <button onClick={()=>{const limpio=o=>Object.fromEntries(Object.entries(o).filter(([,v])=>v!==""&&v!=null));const tar=Object.fromEntries(Object.entries(estCfgEdit.tarifas).map(([k,v])=>[k,limpio(v)]).filter(([,v])=>Object.keys(v).length));guardarEstCfg({tarifas:tar,honorarios:limpio(estCfgEdit.honorarios),oficina:estCfgEdit.oficina});}} style={btn("#1E3A5F","#fff")}>{t("Guardar","Save")}</button>
+                </div>
+              </div>
+            </div>
+          </div>)}
+      </div>);
+  };
+
   const formsNuevos=borradoresPendientes+asiloPendientes+permisoPendientes+foiaPendientes+dirPendientes+renPendientes;
   const navItems = [
     {id:"sec-principal", section:t("Principal","Main")},
@@ -2293,6 +2669,7 @@ const loadTeam=async()=>{
     ]},
     {id:"sec-oficina", section:t("Oficina","Office"), show:isAdmin},
     {id:"pagos",     label:t("Pagos","Payments"),     icon:"ti-credit-card", show:isAdmin, onClick:()=>setShowPagosReporte(true)},
+    {id:"estimados", label:t("Estimados","Estimates"), icon:"ti-calculator", show:isAdmin, onClick:()=>{loadEstimados();}},
     {id:"reportes",  label:t("Reportes","Reports"),   icon:"ti-chart-line", show:isAdmin, onClick:()=>setShowReportesMenu(true)},
     {id:"sec-admin", section:t("Administración","Administration"), show:isAdmin},
     {id:"equipo",    label:t("Equipo","Team"),        icon:"ti-users", show:isAdmin, onClick:()=>{setShowTeam(true);loadOfficeUsers();}},
@@ -2345,7 +2722,7 @@ const loadTeam=async()=>{
               })}
             </div>
           );
-          const VISTAS=["inicio","calendario","monitor","expedientes"];
+          const VISTAS=["inicio","calendario","monitor","expedientes","estimados"];
           const handleClick = ()=>{ if(VISTAS.includes(n.id)){setActiveNav(n.id);window.scrollTo(0,0);} n.onClick&&n.onClick(); };
           if(n.href) return(
             <a key={n.id} href={n.href} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 20px",textDecoration:"none",color:active?"#2563EB":"#64748B",background:active?"#EFF6FF":"transparent",borderLeft:active?"3px solid #2563EB":"3px solid transparent",fontSize:13,fontWeight:active?600:400,transition:"all 0.15s"}}>
@@ -2395,7 +2772,7 @@ const loadTeam=async()=>{
       </div>
     </div>
     <div style={{marginLeft:240,flex:1,minWidth:0}}>
-      {activeNav==="inicio"?renderInicio():activeNav==="calendario"?renderCalendarioPagina():activeNav==="expedientes"?renderExpedientes():<>
+      {activeNav==="inicio"?renderInicio():activeNav==="calendario"?renderCalendarioPagina():activeNav==="expedientes"?renderExpedientes():activeNav==="estimados"?renderEstimados():<>
       <div style={{background:"#F8FAFC",padding:"24px 24px 16px",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
         <div style={{minWidth:220,flex:"1 1 260px"}}>
           <div style={{fontSize:26,fontWeight:800,color:"#0F172A",letterSpacing:"-0.02em"}}>{t("Clientes","Clients")}</div>
