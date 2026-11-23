@@ -77,7 +77,7 @@
       }
     })();
   </script>
-  <style>.cal-dia .cal-mas{opacity:0;transition:opacity .15s}.cal-dia:hover .cal-mas{opacity:1}.cal-dia:hover{box-shadow:inset 0 0 0 1px #DBEAFE}* { box-sizing:border-box; margin:0; padding:0; } body { font-family:'Segoe UI',Inter,sans-serif; background:#F1F5F9; } ::-webkit-scrollbar{width:6px} ::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}</style>
+  <style>.cli-grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:18px;min-height:0;flex:1}.cli-grid .cli-col{overflow-y:auto;max-height:calc(94vh - 140px)}@media (max-width:900px){.cli-grid{grid-template-columns:1fr;overflow-y:auto}.cli-grid .cli-col{max-height:none;overflow:visible}}.cal-dia .cal-mas{opacity:0;transition:opacity .15s}.cal-dia:hover .cal-mas{opacity:1}.cal-dia:hover{box-shadow:inset 0 0 0 1px #DBEAFE}* { box-sizing:border-box; margin:0; padding:0; } body { font-family:'Segoe UI',Inter,sans-serif; background:#F1F5F9; } ::-webkit-scrollbar{width:6px} ::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}</style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css"/>
 </head>
 <body>
@@ -447,7 +447,7 @@ function App(){
   // ── Forma Asilo New + Reporte de Asilo ──
   const[showReportesMenu,setShowReportesMenu]=useState(false);
   const[formsOpen,setFormsOpen]=useState(false);const[borradoresFiltro,setBorradoresFiltro]=useState("");
-  const[showReporteAsilo,setShowReporteAsilo]=useState(false);const[reporteTipo,setReporteTipo]=useState("asilo");const[calRef,setCalRef]=useState(()=>new Date());const[calVista,setCalVista]=useState("mes");const[inicioBusq,setInicioBusq]=useState("");const[expBusq,setExpBusq]=useState("");const[expFiltro,setExpFiltro]=useState("todos");const[expOrden,setExpOrdenRaw]=useState(()=>{try{return localStorage.getItem("expOrden")||"fecha";}catch(e){return "fecha";}});const setExpOrden=v=>{setExpOrdenRaw(v);try{localStorage.setItem("expOrden",v);}catch(e){}};const[notasCal,setNotasCal]=useState([]);const[est,setEst]=useState(null);const[estCfg,setEstCfg]=useState({});const[estCfgEdit,setEstCfgEdit]=useState(null);const[estimadosList,setEstimadosList]=useState([]);const[notaEdit,setNotaEdit]=useState(null);const[notaGuardando,setNotaGuardando]=useState(false);const[raSel,setRaSel]=useState("");
+  const[showReporteAsilo,setShowReporteAsilo]=useState(false);const[reporteTipo,setReporteTipo]=useState("asilo");const[calRef,setCalRef]=useState(()=>new Date());const[calVista,setCalVista]=useState("mes");const[inicioBusq,setInicioBusq]=useState("");const[expBusq,setExpBusq]=useState("");const[expFiltro,setExpFiltro]=useState("todos");const[expOrden,setExpOrdenRaw]=useState(()=>{try{return localStorage.getItem("expOrden")||"fecha";}catch(e){return "fecha";}});const setExpOrden=v=>{setExpOrdenRaw(v);try{localStorage.setItem("expOrden",v);}catch(e){}};const[notasCal,setNotasCal]=useState([]);const[casoTab,setCasoTab]=useState(0);const[est,setEst]=useState(null);const[estCfg,setEstCfg]=useState({});const[estCfgEdit,setEstCfgEdit]=useState(null);const[estimadosList,setEstimadosList]=useState([]);const[notaEdit,setNotaEdit]=useState(null);const[notaGuardando,setNotaGuardando]=useState(false);const[raSel,setRaSel]=useState("");
   const[raBusq,setRaBusq]=useState("");const[raPais,setRaPais]=useState("");
   const[raDesde,setRaDesde]=useState("");const[raHasta,setRaHasta]=useState("");
   const[showAsiloNew,setShowAsiloNew]=useState(false);
@@ -1438,14 +1438,18 @@ const loadTeam=async()=>{
       nombre:c.nombre||"",paisOrigen:c.paisOrigen||"",alienNum:clienteAlien,
       telefono:c.telefono||"",email:c.email||"",encargada:c.encargada||"",
       casos:(c.casos||[]).map(ca=>({...emptyCaso,...ca,alienNum:ca.alienNum||clienteAlien})),
-      nota:c.nota||""
+      nota:c.nota||"",otros:c.otros||""
     });
+    // Abre primero la pestaña del caso con la fecha más próxima
+    let mejor=0,minD=Infinity;
+    (c.casos||[]).forEach((ca,i)=>{[ca.sistema==="foia"?null:ca.fechaCorte,ca.fechaHuellas].forEach(f=>{const d=f?getDias(String(f).slice(0,10)):null;if(d!=null&&d>=0&&d<minD){minD=d;mejor=i;}});});
+    setCasoTab(mejor);
     setShowModal(true);
   };
 
-  const addCaso=()=>setFormCliente(p=>{const alien=p.alienNum||"";return{...p,casos:[...p.casos,{...emptyCaso,id:Date.now(),alienNum:alien}]};});
+  const addCaso=()=>{setCasoTab((formCliente.casos||[]).length);setFormCliente(p=>{const alien=p.alienNum||"";return{...p,casos:[...p.casos,{...emptyCaso,id:Date.now(),alienNum:alien}]};});};
   const updateCaso=(i,v)=>setFormCliente(p=>{const c=[...p.casos];c[i]=v;return{...p,casos:c};});
-  const deleteCaso=(i)=>setFormCliente(p=>({...p,casos:p.casos.filter((_,idx)=>idx!==i)}));
+  const deleteCaso=(i)=>{setCasoTab(x=>Math.max(0,x>=i?x-1:x));setFormCliente(p=>({...p,casos:p.casos.filter((_,idx)=>idx!==i)}));};
 
   const handleSubmit=async()=>{
     if(!formCliente.nombre)return;setSaving(true);
@@ -3707,9 +3711,10 @@ const loadTeam=async()=>{
 
     {showModal&&(
       <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:16}}>
-        <div style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:580,padding:26,boxShadow:"0 20px 60px rgba(0,0,0,0.2)",maxHeight:"94vh",overflowY:"auto"}}>
-          <h2 style={{margin:"0 0 16px",fontSize:17,fontWeight:700,color:"#0F172A"}}>{ editId ? t("Editar cliente","Edit client") : t("Nuevo cliente","New client") }</h2>
-          <div style={{background:"#F8FAFC",borderRadius:10,padding:"14px",marginBottom:16,border:"1px solid #E2E8F0"}}>
+        <div className="cli-modal" style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:1120,padding:"22px 24px",boxShadow:"0 20px 60px rgba(0,0,0,0.2)",maxHeight:"94vh",display:"flex",flexDirection:"column"}}>
+          <h2 style={{margin:"0 0 14px",fontSize:17,fontWeight:700,color:"#0F172A",flexShrink:0}}>{ editId ? t("Editar cliente","Edit client") : t("Nuevo cliente","New client") }{formCliente.nombre&&<span style={{fontWeight:500,color:"#64748B",fontSize:14}}> · {formCliente.nombre}</span>}</h2>
+          <div className="cli-grid">
+          <div className="cli-col" style={{background:"#F8FAFC",borderRadius:10,padding:"14px",border:"1px solid #E2E8F0"}}>
             <div style={{fontSize:12,fontWeight:700,color:"#374151",marginBottom:10,textTransform:"uppercase"}}>{ t("Información personal","Personal information") }</div>
             <Field label={t("Nombre completo *","Full name *")} value={formCliente.nombre} onChange={v=>setFormCliente(p=>({...p,nombre:v}))} placeholder="Nombre completo"/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -3740,13 +3745,34 @@ const loadTeam=async()=>{
               <textarea value={formCliente.otros||""} onChange={e=>setFormCliente(p=>({...p,otros:e.target.value}))} placeholder={t("Otros datos (sale en el Reporte de Asilo)...","Other info (shown in the Asylum Report)...")} rows={2} style={{width:"100%",padding:"8px 11px",borderRadius:7,border:"1px solid #D1D5DB",fontSize:14,resize:"vertical",outline:"none"}}/>
             </div>
           </div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{fontSize:13,fontWeight:700,color:"#0F172A"}}>{ t("Casos del cliente","Client cases") }</div>
-            <button onClick={addCaso} style={{background:"#1E40AF",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,cursor:"pointer",fontWeight:600}}>{ t("+ Agregar caso","+ Add case") }</button>
+          <div className="cli-col" style={{minWidth:0}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#0F172A"}}>{ t("Casos del cliente","Client cases") } <span style={{color:"#94A3B8",fontWeight:600}}>({formCliente.casos.length})</span></div>
+            </div>
+            {(()=>{
+              const SISC={uscis:{l:"USCIS",bg:"#DBEAFE",c:"#1D4ED8"},eoir:{l:"EOIR",bg:"#EDE9FE",c:"#6D28D9"},foia:{l:"FOIA",bg:"#CFFAFE",c:"#0E7490"}};
+              const corto=ca=>{const tc=String(ca.tipoCaso||"").trim();if(!tc)return t("Nuevo caso","New case");const m=/\b(I-\d+[A-Z]?|N-\d+|EOIR-\d+)\b/i.exec(tc);if(m)return m[1].toUpperCase();return tc.replace(/^FOIA\s*-\s*/i,"").replace(/^Expediente\s*/i,"").slice(0,16);};
+              const urg=ca=>[ca.sistema==="foia"?null:ca.fechaCorte,ca.fechaHuellas].some(f=>{const d=f?getDias(String(f).slice(0,10)):null;return d!=null&&d>=0&&d<=3;});
+              const n=formCliente.casos.length;const ti=Math.min(casoTab,Math.max(0,n-1));
+              return(<>
+                <div style={{display:"flex",flexWrap:"wrap",gap:4,borderBottom:"1px solid #E2E8F0",marginBottom:12}}>
+                  {formCliente.casos.map((ca,i)=>{const sc=SISC[ca.sistema]||SISC.uscis;const on=i===ti;return(
+                    <button key={ca.id||i} onClick={()=>setCasoTab(i)} title={ca.tipoCaso||""} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",border:"none",borderBottom:on?"2px solid #2563EB":"2px solid transparent",borderRadius:"8px 8px 0 0",background:on?"#EFF6FF":"transparent",color:on?"#1D4ED8":"#475569",fontWeight:on?700:500,fontSize:12.5,cursor:"pointer",fontFamily:"inherit",marginBottom:-1}}>
+                      <span style={{fontSize:9.5,fontWeight:800,background:sc.bg,color:sc.c,borderRadius:4,padding:"1px 5px"}}>{sc.l}</span>{corto(ca)}
+                      {urg(ca)&&<span title={t("Fecha en los próximos 3 días","Date in the next 3 days")} style={{width:7,height:7,borderRadius:"50%",background:"#DC2626",display:"inline-block"}}></span>}
+                    </button>);})}
+                  <button onClick={addCaso} style={{padding:"8px 12px",border:"none",background:"transparent",color:"#2563EB",fontWeight:800,fontSize:12.5,cursor:"pointer",fontFamily:"inherit"}}>{t("+ Nuevo caso","+ New case")}</button>
+                </div>
+                {n===0&&<div style={{textAlign:"center",padding:"36px 20px",color:"#94A3B8",fontSize:13,background:"#F8FAFC",borderRadius:10,border:"1px dashed #E2E8F0"}}>
+                  {t("Este cliente todavía no tiene casos.","This client has no cases yet.")}
+                  <div style={{marginTop:12}}><button onClick={addCaso} style={{background:"#1E40AF",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",fontSize:12.5,cursor:"pointer",fontWeight:700}}>{t("+ Nuevo caso","+ New case")}</button></div>
+                </div>}
+                {n>0&&(()=>{const i=ti;const ca=formCliente.casos[i];return(<CasoEditorSimple key={ca.id||i} caso={ca} onChange={v=>updateCaso(i,v)} onDelete={()=>{if(window.confirm(t("¿Eliminar este caso? Se quita al guardar.","Delete this case? Removed when you save.")))deleteCaso(i);}} equipo={equipo} isAdmin={isAdmin} clienteId={editId} clienteNombre={formCliente.nombre} onIniciarServicio={(tipo)=>setShowServicioAdicional({tipo,clienteId:editId,clienteNombre:formCliente.nombre,casoAlien:formCliente.alienNum})}/>);})()}
+              </>);
+            })()}
           </div>
-          {formCliente.casos.length===0&&<div style={{textAlign:"center",padding:"20px",color:"#94A3B8",fontSize:13,background:"#F8FAFC",borderRadius:10,border:"1px dashed #E2E8F0",marginBottom:14}}>Sin casos. Haz clic en "+ Agregar caso".</div>}
-          {formCliente.casos.map((ca,i)=>(<CasoEditorSimple key={ca.id||i} caso={ca} onChange={v=>updateCaso(i,v)} onDelete={()=>deleteCaso(i)} equipo={equipo} isAdmin={isAdmin} clienteId={editId} clienteNombre={formCliente.nombre} onIniciarServicio={(tipo)=>setShowServicioAdicional({tipo,clienteId:editId,clienteNombre:formCliente.nombre,casoAlien:formCliente.alienNum})}/>))}
-          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:14,paddingTop:12,borderTop:"1px solid #F1F5F9",flexShrink:0}}>
             <button onClick={()=>setShowModal(false)} style={{padding:"9px 20px",borderRadius:8,border:"1px solid #D1D5DB",background:"#fff",color:"#374151",fontSize:14,cursor:"pointer"}}>Cancelar</button>
             <button onClick={handleSubmit} disabled={!formCliente.nombre||saving} style={{padding:"9px 20px",borderRadius:8,border:"none",background:(!formCliente.nombre||saving)?"#E5E7EB":"#1E40AF",color:(!formCliente.nombre||saving)?"#9CA3AF":"#fff",fontSize:14,fontWeight:600,cursor:(!formCliente.nombre||saving)?"not-allowed":"pointer"}}>{ saving ? t("Guardando...","Saving...") : editId ? t("Guardar cambios","Save changes") : t("Agregar cliente","Add client") }</button>
           </div>
