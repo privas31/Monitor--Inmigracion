@@ -447,7 +447,7 @@ function App(){
   // ── Forma Asilo New + Reporte de Asilo ──
   const[showReportesMenu,setShowReportesMenu]=useState(false);
   const[formsOpen,setFormsOpen]=useState(false);const[borradoresFiltro,setBorradoresFiltro]=useState("");
-  const[showReporteAsilo,setShowReporteAsilo]=useState(false);const[reporteTipo,setReporteTipo]=useState("asilo");const[calRef,setCalRef]=useState(()=>new Date());const[calVista,setCalVista]=useState("mes");const[inicioBusq,setInicioBusq]=useState("");const[expBusq,setExpBusq]=useState("");const[expFiltro,setExpFiltro]=useState("todos");const[expOrden,setExpOrdenRaw]=useState(()=>{try{return localStorage.getItem("expOrden")||"fecha";}catch(e){return "fecha";}});const setExpOrden=v=>{setExpOrdenRaw(v);try{localStorage.setItem("expOrden",v);}catch(e){}};const[notasCal,setNotasCal]=useState([]);const[casoTab,setCasoTab]=useState(0);const[est,setEst]=useState(null);const[estCfg,setEstCfg]=useState({});const[estCfgEdit,setEstCfgEdit]=useState(null);const[estimadosList,setEstimadosList]=useState([]);const[notaEdit,setNotaEdit]=useState(null);const[notaGuardando,setNotaGuardando]=useState(false);const[raSel,setRaSel]=useState("");
+  const[showReporteAsilo,setShowReporteAsilo]=useState(false);const[reporteTipo,setReporteTipo]=useState("asilo");const[calRef,setCalRef]=useState(()=>new Date());const[calVista,setCalVista]=useState("mes");const[inicioBusq,setInicioBusq]=useState("");const[expBusq,setExpBusq]=useState("");const[expFiltro,setExpFiltro]=useState("todos");const[expOrden,setExpOrdenRaw]=useState(()=>{try{return localStorage.getItem("expOrden")||"fecha";}catch(e){return "fecha";}});const setExpOrden=v=>{setExpOrdenRaw(v);try{localStorage.setItem("expOrden",v);}catch(e){}};const[notasCal,setNotasCal]=useState([]);const[casoTab,setCasoTab]=useState(0);const[casoPicker,setCasoPicker]=useState(false);const[est,setEst]=useState(null);const[estCfg,setEstCfg]=useState({});const[estCfgEdit,setEstCfgEdit]=useState(null);const[estimadosList,setEstimadosList]=useState([]);const[notaEdit,setNotaEdit]=useState(null);const[notaGuardando,setNotaGuardando]=useState(false);const[raSel,setRaSel]=useState("");
   const[raBusq,setRaBusq]=useState("");const[raPais,setRaPais]=useState("");
   const[raDesde,setRaDesde]=useState("");const[raHasta,setRaHasta]=useState("");
   const[showAsiloNew,setShowAsiloNew]=useState(false);
@@ -1443,11 +1443,11 @@ const loadTeam=async()=>{
     // Abre primero la pestaña del caso con la fecha más próxima
     let mejor=0,minD=Infinity;
     (c.casos||[]).forEach((ca,i)=>{[ca.sistema==="foia"?null:ca.fechaCorte,ca.fechaHuellas].forEach(f=>{const d=f?getDias(String(f).slice(0,10)):null;if(d!=null&&d>=0&&d<minD){minD=d;mejor=i;}});});
-    setCasoTab(mejor);
+    setCasoTab(mejor);setCasoPicker(false);
     setShowModal(true);
   };
 
-  const addCaso=()=>{setCasoTab((formCliente.casos||[]).length);setFormCliente(p=>{const alien=p.alienNum||"";return{...p,casos:[...p.casos,{...emptyCaso,id:Date.now(),alienNum:alien}]};});};
+  const addCaso=(sistema="uscis")=>{setCasoPicker(false);setCasoTab((formCliente.casos||[]).length);setFormCliente(p=>{const alien=p.alienNum||"";return{...p,casos:[...p.casos,{...emptyCaso,sistema,id:Date.now(),alienNum:alien}]};});};
   const updateCaso=(i,v)=>setFormCliente(p=>{const c=[...p.casos];c[i]=v;return{...p,casos:c};});
   const deleteCaso=(i)=>{setCasoTab(x=>Math.max(0,x>=i?x-1:x));setFormCliente(p=>({...p,casos:p.casos.filter((_,idx)=>idx!==i)}));};
 
@@ -3744,7 +3744,15 @@ const loadTeam=async()=>{
               <label style={{display:"block",fontSize:12,fontWeight:600,color:"#374151",marginBottom:3,textTransform:"uppercase"}}>{t("Otros","Other")}</label>
               <textarea value={formCliente.otros||""} onChange={e=>setFormCliente(p=>({...p,otros:e.target.value}))} placeholder={t("Otros datos (sale en el Reporte de Asilo)...","Other info (shown in the Asylum Report)...")} rows={2} style={{width:"100%",padding:"8px 11px",borderRadius:7,border:"1px solid #D1D5DB",fontSize:14,resize:"vertical",outline:"none"}}/>
             </div>
-            <button onClick={addCaso} style={{width:"100%",marginTop:14,background:"#1E40AF",color:"#fff",border:"none",borderRadius:8,padding:"11px 16px",fontSize:14,cursor:"pointer",fontWeight:700,fontFamily:"inherit"}}>{t("+ Agregar caso","+ Add case")}</button>
+            <button onClick={()=>setCasoPicker(v=>!v)} style={{width:"100%",marginTop:14,background:casoPicker?"#1E3A8A":"#1E40AF",color:"#fff",border:"none",borderRadius:8,padding:"11px 16px",fontSize:14,cursor:"pointer",fontWeight:700,fontFamily:"inherit"}}>{casoPicker?t("✕ Cancelar","✕ Cancel"):t("+ Agregar caso","+ Add case")}</button>
+            {casoPicker&&<div style={{marginTop:8,background:"#fff",border:"1px solid #DBEAFE",borderRadius:10,padding:10}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#334155",marginBottom:8}}>{t("¿De qué sistema es el caso?","Which system is the case in?")}</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+                {Object.entries(SISTEMAS).map(([k,sy])=>(
+                  <button key={k} onClick={()=>addCaso(k)} style={{padding:"10px 4px",borderRadius:8,border:`1.5px solid ${sy.border}`,background:sy.bg,color:sy.color,fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}><span style={{fontSize:18}}>{sy.icon}</span>{sy.label}</button>
+                ))}
+              </div>
+            </div>}
           </div>
           <div className="cli-col" style={{minWidth:0}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -6699,13 +6707,19 @@ Gracias — ${officeData?.name||"Mi Monitor"}`;
 //  Editor de Caso simplificado 
 function CasoEditorSimple({caso,onChange,onDelete,isAdmin=true,equipo=[],clienteId=null,clienteNombre="",onIniciarServicio=()=>{}}){
   const sys=SISTEMAS[caso.sistema]||SISTEMAS.uscis;
+  const[cambiarSis,setCambiarSis]=useState(false);
   return(<div style={{background:"#F8FAFC",border:`2px solid ${sys.border}`,borderRadius:10,padding:"14px",marginBottom:12}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-      <div style={{display:"flex",gap:6}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,gap:8,flexWrap:"wrap"}}>
+      {!cambiarSis?<div style={{display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:12,fontWeight:700,color:sys.color,background:sys.bg,border:`1px solid ${sys.border}`,borderRadius:6,padding:"3px 9px"}}>{sys.icon} {sys.label}</span>
+        <button onClick={()=>setCambiarSis(true)} style={{background:"none",border:"none",color:"#94A3B8",fontSize:11.5,cursor:"pointer",textDecoration:"underline",padding:0,fontFamily:"inherit"}}>{t("cambiar sistema","change system")}</button>
+      </div>:
+      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
         {Object.entries(SISTEMAS).map(([k,s])=>(
-          <button key={k} onClick={()=>onChange({...caso,sistema:k,tipoCaso:""})} style={{padding:"5px 10px",borderRadius:7,border:caso.sistema===k?`2px solid ${s.color}`:"1px solid #E2E8F0",background:caso.sistema===k?s.bg:"#fff",color:caso.sistema===k?s.color:"#374151",fontWeight:caso.sistema===k?700:400,fontSize:12,cursor:"pointer"}}>{s.icon} {s.label}</button>
+          <button key={k} onClick={()=>{if(k!==caso.sistema&&caso.tipoCaso&&!window.confirm(t("Al cambiar de sistema se borra el tipo de caso. ¿Continuar?","Changing system clears the case type. Continue?")))return;if(k!==caso.sistema)onChange({...caso,sistema:k,tipoCaso:""});setCambiarSis(false);}} style={{padding:"5px 10px",borderRadius:7,border:caso.sistema===k?`2px solid ${s.color}`:"1px solid #E2E8F0",background:caso.sistema===k?s.bg:"#fff",color:caso.sistema===k?s.color:"#374151",fontWeight:caso.sistema===k?700:400,fontSize:12,cursor:"pointer"}}>{s.icon} {s.label}</button>
         ))}
-      </div>
+        <button onClick={()=>setCambiarSis(false)} style={{background:"none",border:"none",color:"#94A3B8",fontSize:11.5,cursor:"pointer",padding:"0 4px",fontFamily:"inherit"}}>{t("cancelar","cancel")}</button>
+      </div>}
       <button onClick={onDelete} style={{background:"#FEF2F2",color:"#EF4444",border:"1px solid #FECACA",borderRadius:7,padding:"5px 10px",fontSize:12,cursor:"pointer",fontWeight:600}}>{t("🗑 Eliminar","🗑 Delete")}</button>
     </div>
     <div style={{marginBottom:10}}>
