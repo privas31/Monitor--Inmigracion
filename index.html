@@ -3744,6 +3744,7 @@ const loadTeam=async()=>{
               <label style={{display:"block",fontSize:12,fontWeight:600,color:"#374151",marginBottom:3,textTransform:"uppercase"}}>{t("Otros","Other")}</label>
               <textarea value={formCliente.otros||""} onChange={e=>setFormCliente(p=>({...p,otros:e.target.value}))} placeholder={t("Otros datos (sale en el Reporte de Asilo)...","Other info (shown in the Asylum Report)...")} rows={2} style={{width:"100%",padding:"8px 11px",borderRadius:7,border:"1px solid #D1D5DB",fontSize:14,resize:"vertical",outline:"none"}}/>
             </div>
+            <button onClick={addCaso} style={{width:"100%",marginTop:14,background:"#1E40AF",color:"#fff",border:"none",borderRadius:8,padding:"11px 16px",fontSize:14,cursor:"pointer",fontWeight:700,fontFamily:"inherit"}}>{t("+ Agregar caso","+ Add case")}</button>
           </div>
           <div className="cli-col" style={{minWidth:0}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -3761,11 +3762,9 @@ const loadTeam=async()=>{
                       <span style={{fontSize:9.5,fontWeight:800,background:sc.bg,color:sc.c,borderRadius:4,padding:"1px 5px"}}>{sc.l}</span>{corto(ca)}
                       {urg(ca)&&<span title={t("Fecha en los próximos 3 días","Date in the next 3 days")} style={{width:7,height:7,borderRadius:"50%",background:"#DC2626",display:"inline-block"}}></span>}
                     </button>);})}
-                  <button onClick={addCaso} style={{padding:"8px 12px",border:"none",background:"transparent",color:"#2563EB",fontWeight:800,fontSize:12.5,cursor:"pointer",fontFamily:"inherit"}}>{t("+ Nuevo caso","+ New case")}</button>
                 </div>
                 {n===0&&<div style={{textAlign:"center",padding:"36px 20px",color:"#94A3B8",fontSize:13,background:"#F8FAFC",borderRadius:10,border:"1px dashed #E2E8F0"}}>
-                  {t("Este cliente todavía no tiene casos.","This client has no cases yet.")}
-                  <div style={{marginTop:12}}><button onClick={addCaso} style={{background:"#1E40AF",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",fontSize:12.5,cursor:"pointer",fontWeight:700}}>{t("+ Nuevo caso","+ New case")}</button></div>
+                  {t("Este cliente todavía no tiene casos. Usa el botón «+ Agregar caso» de la izquierda.","This client has no cases yet. Use the «+ Add case» button on the left.")}
                 </div>}
                 {n>0&&(()=>{const i=ti;const ca=formCliente.casos[i];return(<CasoEditorSimple key={ca.id||i} caso={ca} onChange={v=>updateCaso(i,v)} onDelete={()=>{if(window.confirm(t("¿Eliminar este caso? Se quita al guardar.","Delete this case? Removed when you save.")))deleteCaso(i);}} equipo={equipo} isAdmin={isAdmin} clienteId={editId} clienteNombre={formCliente.nombre} onIniciarServicio={(tipo)=>setShowServicioAdicional({tipo,clienteId:editId,clienteNombre:formCliente.nombre,casoAlien:formCliente.alienNum})}/>);})()}
               </>);
