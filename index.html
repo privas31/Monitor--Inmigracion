@@ -447,7 +447,8 @@ function App(){
   // ── Forma Asilo New + Reporte de Asilo ──
   const[showReportesMenu,setShowReportesMenu]=useState(false);
   const[formsOpen,setFormsOpen]=useState(false);const[borradoresFiltro,setBorradoresFiltro]=useState("");
-  const[showReporteAsilo,setShowReporteAsilo]=useState(false);const[reporteTipo,setReporteTipo]=useState("asilo");const[calRef,setCalRef]=useState(()=>new Date());const[calVista,setCalVista]=useState("mes");const[inicioBusq,setInicioBusq]=useState("");const[expBusq,setExpBusq]=useState("");const[expFiltro,setExpFiltro]=useState("todos");const[expOrden,setExpOrdenRaw]=useState(()=>{try{return localStorage.getItem("expOrden")||"fecha";}catch(e){return "fecha";}});const setExpOrden=v=>{setExpOrdenRaw(v);try{localStorage.setItem("expOrden",v);}catch(e){}};const[notasCal,setNotasCal]=useState([]);const[casoTab,setCasoTab]=useState(0);const[casoPicker,setCasoPicker]=useState(false);const[est,setEst]=useState(null);const[estCfg,setEstCfg]=useState({});const[estCfgEdit,setEstCfgEdit]=useState(null);const[estimadosList,setEstimadosList]=useState([]);const[notaEdit,setNotaEdit]=useState(null);const[notaGuardando,setNotaGuardando]=useState(false);const[raSel,setRaSel]=useState("");
+  const[showReporteAsilo,setShowReporteAsilo]=useState(false);const[reporteTipo,setReporteTipo]=useState("asilo");const[calRef,setCalRef]=useState(()=>new Date());const[calVista,setCalVista]=useState("mes");const[inicioBusq,setInicioBusq]=useState("");const[expBusq,setExpBusq]=useState("");const[expFiltro,setExpFiltro]=useState("todos");const[expOrden,setExpOrdenRaw]=useState(()=>{try{return localStorage.getItem("expOrden")||"fecha";}catch(e){return "fecha";}});const setExpOrden=v=>{setExpOrdenRaw(v);try{localStorage.setItem("expOrden",v);}catch(e){}};const[notasCal,setNotasCal]=useState([]);const[casoTab,setCasoTab]=useState(0);const[casoPicker,setCasoPicker]=useState(false);const[showDups,setShowDups]=useState(false);const[dupKeep,setDupKeep]=useState({});const[dupUniendo,setDupUniendo]=useState(null);
+  const[dupsIgnorados,setDupsIgnorados]=useState(()=>{try{return JSON.parse(localStorage.getItem("dupsIgnorados")||"[]");}catch(e){return [];}});const[est,setEst]=useState(null);const[estCfg,setEstCfg]=useState({});const[estCfgEdit,setEstCfgEdit]=useState(null);const[estimadosList,setEstimadosList]=useState([]);const[notaEdit,setNotaEdit]=useState(null);const[notaGuardando,setNotaGuardando]=useState(false);const[raSel,setRaSel]=useState("");
   const[raBusq,setRaBusq]=useState("");const[raPais,setRaPais]=useState("");
   const[raDesde,setRaDesde]=useState("");const[raHasta,setRaHasta]=useState("");
   const[showAsiloNew,setShowAsiloNew]=useState(false);
@@ -730,6 +731,62 @@ function App(){
   setLoadingPagos(prev=>({...prev,[clienteId]:false}));
 };
 
+const normNombreDup=n=>String(n||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z ]/g," ").replace(/\s+/g," ").trim();
+const normAlienDup=a=>{const d=String(a||"").replace(/\D/g,"");return d.length>=8?d.replace(/^0+/,""):"";};
+const calcDuplicados=()=>{
+  const L=clientes||[];const par={};const f=x=>par[x]===x?x:(par[x]=f(par[x]));L.forEach(c=>par[c.id]=c.id);
+  const un=(a,b)=>{par[f(a)]=f(b);};
+  const porA={},porN={};
+  L.forEach(c=>{const a=normAlienDup(c.alienNum);if(a)(porA[a]=porA[a]||[]).push(c);const n=normNombreDup(c.nombre);if(n.length>=5)(porN[n]=porN[n]||[]).push(c);});
+  Object.values(porA).forEach(g=>g.slice(1).forEach(c=>un(c.id,g[0].id)));
+  // mismo nombre, salvo que tengan A# distintos (serían personas diferentes)
+  Object.values(porN).forEach(g=>{for(let i=0;i<g.length;i++)for(let j=i+1;j<g.length;j++){const a=normAlienDup(g[i].alienNum),b=normAlienDup(g[j].alienNum);if(!a||!b||a===b)un(g[i].id,g[j].id);}});
+  const grupos={};L.forEach(c=>{const r=f(c.id);(grupos[r]=grupos[r]||[]).push(c);});
+  return Object.values(grupos).filter(g=>g.length>1).map(g=>{
+    const key=g.map(c=>c.id).sort().join("|");
+    const orden=[...g].sort((a,b)=>(b.expediente?1:0)-(a.expediente?1:0)||(b.casos||[]).length-(a.casos||[]).length||String(a.createdAt||"9").localeCompare(String(b.createdAt||"9")));
+    return{key,miembros:orden};
+  }).filter(g=>!dupsIgnorados.includes(g.key));
+};
+const ignorarDuplicado=key=>{const n=[...dupsIgnorados,key];setDupsIgnorados(n);try{localStorage.setItem("dupsIgnorados",JSON.stringify(n));}catch(e){}};
+const unirDuplicados=async(grupo)=>{
+  const keepId=dupKeep[grupo.key]||grupo.miembros[0].id;
+  const keep=grupo.miembros.find(c=>c.id===keepId);const otros=grupo.miembros.filter(c=>c.id!==keepId);
+  if(!window.confirm(t(`Se unirán ${grupo.miembros.length} registros en el de ${keep.expediente||keep.nombre}. Los casos y pagos de la copia pasan al registro que conservas y la copia se borra. ¿Continuar?`,`${grupo.miembros.length} records will be merged into ${keep.expediente||keep.nombre}. Cases and payments move over and the copy is deleted. Continue?`)))return;
+  setDupUniendo(grupo.key);
+  try{
+    const{db,doc,updateDoc,deleteDoc,collection,query,where,getDocs,addDoc}=window._firebase;
+    const firma=ca=>[ca.sistema||"uscis",String(ca.tipoCaso||"").trim().toLowerCase(),String(ca.receiptNum||"").replace(/\s/g,"").toUpperCase(),ca.fechaCorte||"",ca.fechaHuellas||"",ca.foiaTracking||""].join("|");
+    let casos=[...(keep.casos||[])];let agregados=0;
+    otros.forEach(o=>(o.casos||[]).forEach(ca=>{
+      const idx=casos.findIndex(x=>firma(x)===firma(ca));
+      if(idx<0){casos.push({...ca,id:ca.id||Date.now()+Math.floor(Math.random()*1e6)});agregados++;return;}
+      // mismo caso en las dos copias: solo agrega pagos con un nombre que no exista
+      const ya=new Set((casos[idx].procesos||[]).map(p=>String(p.nombre||"").trim().toLowerCase()));
+      const extra=(ca.procesos||[]).filter(p=>!ya.has(String(p.nombre||"").trim().toLowerCase()));
+      if(extra.length)casos[idx]={...casos[idx],procesos:[...(casos[idx].procesos||[]),...extra]};
+    }));
+    const upd={casos};
+    ["nombre","paisOrigen","alienNum","telefono","email","encargada","expediente","otros"].forEach(k=>{if(!String(keep[k]||"").trim()){const v=otros.map(o=>o[k]).find(v=>String(v||"").trim());if(v)upd[k]=v;}});
+    const notas=[keep.nota,...otros.map(o=>o.nota)].map(n=>String(n||"").trim()).filter(Boolean);
+    const notaU=[...new Set(notas)].join("\n");if(notaU!==String(keep.nota||"").trim())upd.nota=notaU;
+    const fechas=[keep,...otros].map(c=>c.createdAt).filter(Boolean).sort();if(fechas[0]&&fechas[0]!==keep.createdAt)upd.createdAt=fechas[0];
+    if(!keep.officeId&&officeId)upd.officeId=officeId;
+    upd.updatedAt=new Date().toISOString();upd.updatedBy=user?.email||"";
+    await updateDoc(doc(db,"clientes",keepId),upd);
+    // pasar al registro que se conserva todo lo que apunta a la copia
+    const COLS=["historial","pagos","casos_eoir","casos_uscis","envios_tracking","solicitudesServicio","notasCalendario","estimados","alertas_eoir"];
+    for(const o of otros){
+      for(const col of COLS){try{const sn=await getDocs(query(collection(db,col),where("clienteId","==",o.id)));for(const d of sn.docs)await updateDoc(d.ref,{clienteId:keepId});}catch(e){}}
+      await deleteDoc(doc(db,"clientes",o.id));
+    }
+    try{await addDoc(collection(db,"historial"),{clienteId:keepId,officeId,accion:`🔗 Unido con ${otros.length} registro(s) duplicado(s); ${agregados} caso(s) agregado(s)`,cambios:[{icono:"🔗",texto:`Unido con registro duplicado (${otros.map(o=>o.expediente||"sin EXP").join(", ")})`}],usuario:userData?.displayName||user?.email||"",usuarioEmail:user?.email||"",fecha:new Date().toISOString()});}catch(e){}
+    const otrosIds=new Set(otros.map(o=>o.id));
+    setClientes(prev=>prev.filter(c=>!otrosIds.has(c.id)).map(c=>c.id===keepId?{...c,...upd}:c));
+    showToastFn(t("Registros unidos ✓","Records merged ✓"));
+  }catch(e){showToastFn(t("Error al unir: ","Merge error: ")+e.message,"error");}
+  setDupUniendo(null);
+};
 const assignExpedientes=async()=>{
   try{
     const{db,collection,getDocs,query,where,updateDoc,doc}=window._firebase;
@@ -2847,6 +2904,10 @@ const loadTeam=async()=>{
         <button onClick={()=>setShowDropdownFiltro(v=>!v)} style={{display:"flex",alignItems:"center",gap:7,padding:"10px 16px",borderRadius:10,border:filtroSistema!=="todos"||filtroStatus!=="todos"?"1px solid #BFDBFE":"1px solid #E2E8F0",background:filtroSistema!=="todos"||filtroStatus!=="todos"?"#EFF6FF":"#fff",color:filtroSistema!=="todos"||filtroStatus!=="todos"?"#1E40AF":"#374151",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
           <span style={{fontSize:13}}>⚙️</span> {t("Filtros","Filters")}
         </button>
+        {(()=>{const n=calcDuplicados().length;return n>0&&(
+          <button onClick={()=>setShowDups(true)} style={{background:"#FFF7ED",color:"#C2410C",border:"1px solid #FED7AA",borderRadius:10,padding:"10px 14px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
+            👥 {t("Posibles duplicados","Possible duplicates")} ({n})
+          </button>);})()}
         {clientes.some(c=>!c.expediente)&&(
           <button onClick={assignExpedientes} style={{background:"#7C3AED",color:"#fff",border:"none",borderRadius:10,padding:"10px 14px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
             🔢 {t("Asignar EXP","Assign EXP")}
@@ -3709,6 +3770,43 @@ const loadTeam=async()=>{
 
     
 
+    {showDups&&(()=>{const grupos=calcDuplicados();const pag=c=>(c.casos||[]).reduce((s,ca)=>s+getTotalPagado(ca.procesos),0);const tot=c=>(c.casos||[]).reduce((s,ca)=>s+getTotalProcesos(ca.procesos),0);
+      const money=v=>"$"+Number(v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+      return(<div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}} onClick={()=>setShowDups(false)}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:980,maxHeight:"92vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+        <div style={{padding:"20px 24px 12px",borderBottom:"1px solid #F1F5F9",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+          <div><h2 style={{margin:0,fontSize:17,fontWeight:800,color:"#0F172A"}}>👥 {t("Posibles duplicados","Possible duplicates")}</h2>
+          <div style={{fontSize:12.5,color:"#64748B",marginTop:4}}>{t("Clientes con el mismo nombre o el mismo A#. Marca cuál conservar y presiona «Unir»: sus casos y pagos se juntan y la copia se borra.","Clients with the same name or A#. Pick which to keep and press «Merge».")}</div></div>
+          <button onClick={()=>setShowDups(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#94A3B8"}}>✕</button>
+        </div>
+        <div style={{overflowY:"auto",padding:"16px 24px 24px"}}>
+          {grupos.length===0&&<div style={{textAlign:"center",padding:40,color:"#16A34A",fontWeight:700}}>✓ {t("No quedan duplicados","No duplicates left")}</div>}
+          {grupos.map(g=>{const keepId=dupKeep[g.key]||g.miembros[0].id;const motivoA=new Set(g.miembros.map(c=>normAlienDup(c.alienNum)).filter(Boolean)).size===1&&g.miembros.every(c=>normAlienDup(c.alienNum));
+            return(<div key={g.key} style={{border:"1px solid #E2E8F0",borderRadius:12,padding:14,marginBottom:14,background:"#F8FAFC"}}>
+            <div style={{fontSize:11.5,fontWeight:700,color:"#C2410C",marginBottom:10}}>{motivoA?t("Mismo A#","Same A#"):t("Mismo nombre","Same name")}</div>
+            <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(260px,1fr))`,gap:10}}>
+              {g.miembros.map(c=>{const on=c.id===keepId;return(
+                <label key={c.id} style={{display:"block",cursor:"pointer",background:"#fff",border:on?"2px solid #16A34A":"1px solid #E2E8F0",borderRadius:10,padding:12,position:"relative"}}>
+                  <input type="radio" name={"dup-"+g.key} checked={on} onChange={()=>setDupKeep(p=>({...p,[g.key]:c.id}))} style={{position:"absolute",top:12,right:12}}/>
+                  <div style={{fontSize:11,fontWeight:800,color:on?"#16A34A":"#94A3B8",marginBottom:4}}>{on?t("✓ CONSERVAR ESTE","✓ KEEP THIS"):t("Copia (se borra)","Copy (deleted)")}</div>
+                  <div style={{fontWeight:800,color:"#0F172A",fontSize:14}}>{c.expediente&&<span style={{background:"#DBEAFE",color:"#1D4ED8",borderRadius:5,padding:"1px 6px",fontSize:11,marginRight:6}}>{c.expediente}</span>}{c.nombre||"—"}</div>
+                  <div style={{fontSize:12,color:"#475569",marginTop:6,lineHeight:1.65}}>
+                    <div>A#: <b>{c.alienNum||"—"}</b> · {c.paisOrigen||"—"}</div>
+                    <div>✉ {c.email||"—"}</div><div>☎ {c.telefono||"—"}</div>
+                    <div>👤 {c.encargada||"—"}</div>
+                    <div>📁 {(c.casos||[]).length} {t("caso(s)","case(s)")}: {(c.casos||[]).map(ca=>ca.tipoCaso||"—").join(", ")||"—"}</div>
+                    <div>💵 {money(pag(c))} / {money(tot(c))}</div>
+                    <div style={{color:"#94A3B8"}}>{t("Creado","Created")}: {c.createdAt?String(c.createdAt).slice(0,10):t("sin fecha","no date")}</div>
+                  </div>
+                </label>);})}
+            </div>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:12,flexWrap:"wrap"}}>
+              <button onClick={()=>ignorarDuplicado(g.key)} style={{background:"#fff",color:"#475569",border:"1px solid #E2E8F0",borderRadius:8,padding:"8px 14px",fontSize:12.5,cursor:"pointer",fontWeight:600}}>{t("No son la misma persona","Not the same person")}</button>
+              <button disabled={dupUniendo===g.key} onClick={()=>unirDuplicados(g)} style={{background:"#16A34A",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",fontSize:12.5,cursor:"pointer",fontWeight:700,opacity:dupUniendo===g.key?0.6:1}}>{dupUniendo===g.key?t("Uniendo…","Merging…"):t("🔗 Unir","🔗 Merge")}</button>
+            </div>
+          </div>);})}
+        </div>
+      </div></div>);})()}
     {showModal&&(
       <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:16}}>
         <div className="cli-modal" style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:1120,padding:"22px 24px",boxShadow:"0 20px 60px rgba(0,0,0,0.2)",maxHeight:"94vh",display:"flex",flexDirection:"column"}}>
