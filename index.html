@@ -249,6 +249,8 @@ const STATUS_CONFIG = getStatusConfig();
 
 //  Helpers 
 function getStatus(f){if(!f)return"pendiente";const h=new Date();h.setHours(0,0,0,0);const d=Math.round((new Date(f+"T00:00:00")-h)/86400000);if(d<0)return"vencido";if(d===0)return"hoy";if(d<=3)return"urgente";if(d<=14)return"proximo";return"ok";}
+// "Iliana O." y "Iliana Orbegozo" cuentan como la misma encargada (se agrupa por primer nombre)
+function claveEncargada(n){const w=String(n||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim().split(/\s+/)[0]||"";return w.replace(/[^a-z]/g,"");}
 function getDias(f){if(!f)return null;const h=new Date();h.setHours(0,0,0,0);return Math.round((new Date(f+"T00:00:00")-h)/86400000);}
 function fmt(f){if(!f)return"—";const[y,m,d]=f.split("-");return`${m}/${d}/${y}`;}
 function fmtA(a){const c=(a||"").replace(/\D/g,"").slice(0,9);if(c.length<=3)return c;if(c.length<=6)return c.slice(0,3)+"-"+c.slice(3);return c.slice(0,3)+"-"+c.slice(3,6)+"-"+c.slice(6);}
@@ -380,7 +382,7 @@ function App(){
   const[authLoading,setAuthLoading]=useState(true);
   const[clientes,setClientes]=useState([]);const[loading,setLoading]=useState(false);const[solicitudesServicio,setSolicitudesServicio]=useState([]);
   const[showModal,setShowModal]=useState(false);const[editId,setEditId]=useState(null);const[formCliente,setFormCliente]=useState(emptyCliente);
-  const[filtroStatus,setFiltroStatus]=useState("todos");const[filtroSistema,setFiltroSistema]=useState("todos");
+  const[filtroStatus,setFiltroStatus]=useState("todos");const[filtroEncargada,setFiltroEncargadaRaw]=useState(()=>{try{return localStorage.getItem("filtroEncargada")||"todas";}catch(e){return "todas";}});const setFiltroEncargada=v=>{setFiltroEncargadaRaw(v);try{localStorage.setItem("filtroEncargada",v);}catch(e){}};const[filtroSistema,setFiltroSistema]=useState("todos");
   const[showDropdownFiltro,setShowDropdownFiltro]=useState(false);
   const[busqueda,setBusqueda]=useState("");const[busquedaActiva,setBusquedaActiva]=useState("");const[saving,setSaving]=useState(false);
   const[toast,setToast]=useState(null);const[sortBy,setSortBy]=useState("fecha");
@@ -1664,15 +1666,16 @@ const loadTeam=async()=>{
   };
 
   const filtered=React.useMemo(()=>{
+    const okEnc=c=>filtroEncargada==="todas"||(filtroEncargada==="__sin"?!claveEncargada(c.encargada):claveEncargada(c.encargada)===filtroEncargada);
     if(busquedaActiva.trim()){
       const q=busquedaActiva.trim().toLowerCase();
-      return clientes.filter(c=>
+      return clientes.filter(okEnc).filter(c=>
         c.nombre.toLowerCase().includes(q)||
         (c.alienNum||"").replace(/\D/g,"").includes(q.replace(/\D/g,""))||
         (c.expediente||"").toLowerCase().includes(q)
       );
     }
-    return clientes.filter(c=>{
+    return clientes.filter(okEnc).filter(c=>{
       if(filtroSistema==="deportado")return c.deportado===true;
       if(c.deportado)return false;
       const st=getStatusCliente(c);
@@ -1683,7 +1686,7 @@ const loadTeam=async()=>{
       if(sortBy==="fecha"){const fa=getPróximaFecha(a),fb=getPróximaFecha(b);if(!fa)return 1;if(!fb)return -1;return new Date(fa)-new Date(fb);}
       return a.nombre.localeCompare(b.nombre);
     });
-  },[busquedaActiva,clientes,filtroStatus,filtroSistema,sortBy]);
+  },[busquedaActiva,clientes,filtroStatus,filtroSistema,sortBy,filtroEncargada]);
 
   const cnt=(s,sys="todos")=>clientes.filter(c=>{if(sys==="deportado")return c.deportado===true;return(sys==="todos"||(c.casos||[]).some(ca=>ca.sistema===sys))&&(s==="todos"||getStatusCliente(c)===s);}).length;
 
@@ -2855,7 +2858,7 @@ const loadTeam=async()=>{
           <button onClick={openAdd} style={{background:"#2563EB",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 6px rgba(37,99,235,0.30)"}}>+ {t("Nuevo Cliente","New Client")}</button>
         </div>
       </div>
-      <div style={{background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",padding:"4px 24px 14px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:30}} onClick={e=>{if(!e.target.closest('#dropdown-filtro-i')&&!e.target.closest('#btn-dropdown-filtro-i'))setShowDropdownFiltro(false);}}>
+      <div style={{background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",padding:"4px 24px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",position:"sticky",top:0,zIndex:30}} onClick={e=>{if(!e.target.closest('#dropdown-filtro-i')&&!e.target.closest('#btn-dropdown-filtro-i'))setShowDropdownFiltro(false);}}>
         <div style={{position:"relative",flexShrink:0}} id="dropdown-filtro-i">
           <button id="btn-dropdown-filtro-i" onClick={()=>setShowDropdownFiltro(v=>!v)} style={{display:"flex",alignItems:"center",gap:6,padding:"10px 16px",borderRadius:10,fontSize:13,fontWeight:600,background:filtroSistema!=="todos"||filtroStatus!=="todos"?"#EFF6FF":"#fff",color:filtroSistema!=="todos"||filtroStatus!=="todos"?"#1E40AF":"#374151",border:filtroSistema!=="todos"||filtroStatus!=="todos"?"1px solid #BFDBFE":"1px solid #E2E8F0",cursor:"pointer",whiteSpace:"nowrap"}}>
             <span style={{fontSize:14}}>{filtroSistema==="todos"?"🗂":filtroSistema==="uscis"?"🏛":filtroSistema==="eoir"?"⚖️":filtroSistema==="foia"?"📂":"🚫"}</span>
@@ -2889,7 +2892,7 @@ const loadTeam=async()=>{
             </div>
           )}
         </div>
-        <div style={{flex:1,display:"flex",gap:6,alignItems:"center",minWidth:0}}>
+        <div style={{flex:"1 1 300px",display:"flex",gap:6,alignItems:"center",minWidth:260}}>
           <div style={{flex:1,display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #E2E8F0",borderRadius:10,padding:"0 14px",minWidth:0}}>
             <span style={{fontSize:14,color:"#94A3B8",flexShrink:0}}>🔍</span>
             <input value={busqueda} onChange={e=>setBusqueda(e.target.value)} onKeyDown={e=>e.key==="Enter"&&setBusquedaActiva(busqueda)} placeholder={t("Buscar por nombre, número de recibo o A-Number...","Search by name, receipt number or A-Number...")} style={{flex:1,padding:"10px 0",border:"none",fontSize:13,background:"transparent",outline:"none",minWidth:0}}/>
@@ -2897,6 +2900,16 @@ const loadTeam=async()=>{
           </div>
           {busquedaActiva&&<button onClick={()=>{setBusqueda("");setBusquedaActiva("");}} style={{padding:"10px 14px",borderRadius:10,border:"1px solid #E2E8F0",background:"#fff",color:"#374151",fontSize:13,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>✕ {t("Limpiar","Clear")}</button>}
         </div>
+        {(()=>{const m={};const lab=(k,v)=>{if(!m[k])m[k]={n:0,nombres:{}};m[k].nombres[v]=(m[k].nombres[v]||0)+1;};
+          (equipo||[]).forEach(e=>{const k=claveEncargada(e);if(k){if(!m[k])m[k]={n:0,nombres:{}};m[k].eq=e;}});
+          let sin=0;(clientes||[]).forEach(c=>{const k=claveEncargada(c.encargada);if(!k){sin++;return;}lab(k,c.encargada.trim());m[k].n++;});
+          const ops=Object.entries(m).map(([k,o])=>({k,n:o.n,l:o.eq||Object.entries(o.nombres).sort((a,b)=>b[1]-a[1])[0]?.[0]||k})).sort((a,b)=>a.l.localeCompare(b.l));
+          const act=filtroEncargada!=="todas";
+          return(<select value={filtroEncargada} onChange={e=>setFiltroEncargada(e.target.value)} title={t("Filtrar por encargada","Filter by assignee")} style={{padding:"10px 14px",borderRadius:10,border:act?"1px solid #BFDBFE":"1px solid #E2E8F0",fontSize:13,background:act?"#EFF6FF":"#fff",cursor:"pointer",color:act?"#1E40AF":"#374151",fontWeight:act?700:500,maxWidth:190,flexShrink:0}}>
+            <option value="todas">👤 {t("Todas las encargadas","All assignees")}</option>
+            {ops.map(o=><option key={o.k} value={o.k}>👤 {o.l} ({o.n})</option>)}
+            <option value="__sin">{t("Sin asignar","Unassigned")} ({sin})</option>
+          </select>);})()}
         <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{padding:"10px 14px",borderRadius:10,border:"1px solid #E2E8F0",fontSize:13,background:"#fff",cursor:"pointer",color:"#374151",fontWeight:500}}>
           <option value="fecha">{t("Por próxima fecha","By next date")}</option>
           <option value="nombre">{t("Por nombre","By name")}</option>
